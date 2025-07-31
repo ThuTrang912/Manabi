@@ -50,17 +50,7 @@ export default function FolderPage() {
 
   return (
     <div className="min-h-screen bg-white flex flex-col">
-      <TopBar
-        avatarUrl={avatarUrl}
-        userName={userName}
-        userEmail={userEmail}
-        showMenu={showMenu}
-        setShowMenu={setShowMenu}
-        menuRef={menuRef}
-        showSidebar={showSidebar}
-        setShowSidebar={setShowSidebar}
-        navigate={navigate}
-      />
+      <TopBar navigate={navigate} />
       <div className="flex flex-1">
         <Sidebar showSidebar={showSidebar} setShowSidebar={setShowSidebar} navigate={navigate} />
         <main className="flex-1 flex flex-col items-center pt-12">

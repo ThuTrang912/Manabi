@@ -39,6 +39,10 @@ export default function HomePage() {
         <Sidebar navigate={navigate} />
         {/* Main Content */}
         <main className="flex-1 p-8">
+          {/* Quizlet iframe embed */}
+          {/* <div className="mb-8">
+            <iframe src="https://quizlet.com/469507067/match/embed?i=svf2q&x=1jj1" height="500" width="100%" style={{border:0}} title="Quizlet Match Game" />
+          </div> */}
           <h2 className="text-lg font-semibold mb-4">Gần đây</h2>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {/* Card Example */}
