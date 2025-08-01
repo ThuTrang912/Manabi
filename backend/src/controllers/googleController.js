@@ -6,7 +6,9 @@ export const googleCallback = async (req, res) => {
   try {
     const { code } = req.query;
     if (!code) {
-      return res.status(400).json({ message: "Thiếu mã code từ Google. Không thể xác thực." });
+      return res
+        .status(400)
+        .json({ message: "Thiếu mã code từ Google. Không thể xác thực." });
     }
     // Lấy access_token từ Google
     const tokenRes = await axios.post("https://oauth2.googleapis.com/token", {
@@ -14,19 +16,30 @@ export const googleCallback = async (req, res) => {
       client_id: process.env.GOOGLE_CLIENT_ID,
       client_secret: process.env.GOOGLE_CLIENT_SECRET,
       redirect_uri: process.env.GOOGLE_REDIRECT_URI,
-      grant_type: "authorization_code"
+      grant_type: "authorization_code",
     });
     const access_token = tokenRes.data.access_token;
     // Lấy thông tin user từ Google
-    const userRes = await axios.get("https://www.googleapis.com/oauth2/v2/userinfo", {
-      headers: { Authorization: `Bearer ${access_token}` }
-    });
+    const userRes = await axios.get(
+      "https://www.googleapis.com/oauth2/v2/userinfo",
+      {
+        headers: { Authorization: `Bearer ${access_token}` },
+      }
+    );
     const { email, name, picture, id: googleId } = userRes.data;
     // Tìm hoặc tạo user trong MongoDB
     let user = await User.findOne({ email });
-    const defaultAvatar = "https://ui-avatars.com/api/?name=" + encodeURIComponent(name || email) + "&background=cccccc&color=555555&size=96";
+    const defaultAvatar =
+      "https://ui-avatars.com/api/?name=" +
+      encodeURIComponent(name || email) +
+      "&background=cccccc&color=555555&size=96";
     if (!user) {
-      user = new User({ email, name, avatar: picture || defaultAvatar, googleId });
+      user = new User({
+        email,
+        name,
+        avatar: picture || defaultAvatar,
+        googleId,
+      });
       await user.save();
     } else {
       if (!user.googleId) {
@@ -42,7 +55,7 @@ export const googleCallback = async (req, res) => {
         userId: user._id,
         email: user.email,
         name: user.name,
-        avatar: user.avatar
+        avatar: user.avatar,
       },
       process.env.JWT_SECRET,
       { expiresIn: "7d" }
@@ -57,13 +70,13 @@ export const googleCallback = async (req, res) => {
       console.error("Google OAuth error response:", err.response.data);
       res.status(500).json({
         message: "Google login error",
-        error: err.response.data
+        error: err.response.data,
       });
     } else {
       console.error("Google OAuth error:", err.message);
       res.status(500).json({
         message: "Google login error",
-        error: err.message
+        error: err.message,
       });
     }
   }

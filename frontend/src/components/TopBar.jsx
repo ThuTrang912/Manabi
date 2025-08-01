@@ -9,6 +9,7 @@ export default function TopBar({ navigate }) {
   let avatarUrl = "";
   let userName = "";
   let userEmail = "";
+  let userId = "";
   const token = localStorage.getItem("auth_token");
   if (token) {
     try {
@@ -17,6 +18,7 @@ export default function TopBar({ navigate }) {
       const payload = JSON.parse(jsonStr);
       userName = payload.name || "";
       userEmail = payload.email || "";
+      userId = payload._id || payload.id || payload.userId || "";
       const defaultAvatar = "https://ui-avatars.com/api/?name=" + encodeURIComponent(userName || userEmail) + "&background=cccccc&color=555555&size=96";
       avatarUrl = payload.avatar || defaultAvatar;
     } catch (e) {
@@ -24,33 +26,103 @@ export default function TopBar({ navigate }) {
       avatarUrl = defaultAvatar;
       userName = "";
       userEmail = "";
+      userId = "";
     }
   } else {
     const defaultAvatar = "https://ui-avatars.com/api/?name=User&background=cccccc&color=555555&size=96";
     avatarUrl = defaultAvatar;
+    userId = "";
   }
   // UI state
   const [showMenu, setShowMenu] = React.useState(false);
   const [showAdd, setShowAdd] = React.useState(false);
   const menuRef = React.useRef();
-  const [showFolderModal, setShowFolderModal] = React.useState(false);
+  const [showAddFolderModal, setshowAddFolderModal] = React.useState(false);
   const [folderName, setFolderName] = React.useState("");
-  const [showTagToast, setShowTagToast] = React.useState(false);
-  // Các trường động cho toast
-  const defaultFields = [
-    { id: 1, label: "Mặt trước", value: "" },
-    { id: 2, label: "Mặt sau", value: "" },
-    { id: 3, label: "Thêm Thẻ ngược", value: "" },
-    { id: 4, label: "Nhãn", value: "" },
+  const [showAddCardModal, setshowAddCardModal] = React.useState(false);
+  
+  
+  // Card type dropdown options
+  const cardTypeOptions = [
+    "Basic Quizlet Extended",
+    "Cơ bản",
+    "Cơ bản (nhập câu trả lời)",
+    "Cơ bản (thẻ ngược tuỳ chọn)",
+    "Cơ bản (với thẻ ngược)",
+    "Image Occlusion",
+    "iKnow! Sentences",
+    "iKnow! Vocabulary",
+    "Điền chỗ trống"
   ];
-  const [fields, setFields] = React.useState(defaultFields);
+  // Card set dropdown options (dummy, replace with real data)
+  const cardSetOptions = [
+    "Japanese Core 2000 Step 01 Listening Sentence Vocab + Images",
+    "Test bộ thẻ 2",
+    "Test bộ thẻ mới",
+    "Từ vựng tiếng anh p30(. 3000 từ thông dụng nhất) IELTS"
+  ];
+
+  // State for selected type/set, default to last used or first
+  // Modal chọn bộ thẻ
+  const [showSetModal, setShowSetModal] = React.useState(false);
+  const [setFilter, setSetFilter] = React.useState("");
+  const filteredSets = cardSetOptions.filter(set => set.toLowerCase().includes(setFilter.toLowerCase()));
+  // Modal chọn kiểu thẻ
+  const [showTypeModal, setShowTypeModal] = React.useState(false);
+  const [typeFilter, setTypeFilter] = React.useState("");
+  const filteredTypes = cardTypeOptions.filter(type => type.toLowerCase().includes(typeFilter.toLowerCase()));
+  const [selectedCardType, setSelectedCardType] = React.useState(() => {
+    return localStorage.getItem("lastCardType") || cardTypeOptions[3];
+  });
+  const [selectedCardSet, setSelectedCardSet] = React.useState(() => {
+    return localStorage.getItem("lastCardSet") || cardSetOptions[0];
+  });
+  // const [selectedCardType, setSelectedCardType] = React.useState(cardTypeOptions[0]);
+  // const [selectedCardSet, setSelectedCardSet] = React.useState(cardSetOptions[0]);
+
+  // State for selected type/set, default to last used or first
+  // Save last selected type/set
+  React.useEffect(() => {
+    localStorage.setItem("lastCardType", selectedCardType);
+  }, [selectedCardType]);
+  React.useEffect(() => {
+    localStorage.setItem("lastCardSet", selectedCardSet);
+  }, [selectedCardSet]);
+  
+
+  // Các trường động cho toast
+  const [frontFields, setFrontFields] = React.useState([{ id: 1, label: "Mặt trước", value: "" }]);
+  const [backFields, setBackFields] = React.useState([{ id: 2, label: "Mặt sau", value: "" }]);
+
+  // Add field for Mặt trước
+  const addFrontField = () => {
+    const nextId = frontFields.length ? Math.max(...frontFields.map(f => f.id)) + 1 : 1;
+    setFrontFields([...frontFields, { id: nextId, label: `Trường mặt trước ${nextId}`, value: "" }]);
+  };
+  // Add field for Mặt sau
+  const addBackField = () => {
+    const nextId = backFields.length ? Math.max(...backFields.map(f => f.id)) + 1 : 1;
+    setBackFields([...backFields, { id: nextId, label: `Trường mặt sau ${nextId}`, value: "" }]);
+  };
+  // Remove field
+  const removeFrontField = (id) => {
+    setFrontFields(frontFields.filter(f => f.id !== id));
+  };
+  const removeBackField = (id) => {
+    setBackFields(backFields.filter(f => f.id !== id));
+  };
+  // Update field
+  const updateFrontField = (id, value) => {
+    setFrontFields(frontFields.map(f => f.id === id ? { ...f, value } : f));
+  };
+  const updateBackField = (id, value) => {
+    setBackFields(backFields.map(f => f.id === id ? { ...f, value } : f));
+  };
+
   // Danh sách thẻ đã nhập
   const [addedCards, setAddedCards] = React.useState([]);
   // Thêm trường mới
-  const addField = () => {
-    const nextId = fields.length ? Math.max(...fields.map(f => f.id)) + 1 : 1;
-    setFields([...fields, { id: nextId, label: `Trường ${nextId}`, value: "" }]);
-  };
+  // (Obsolete) addField removed, now handled by addFrontField/addBackField
   // Xóa trường
   const removeField = (id) => {
     setFields(fields.filter(f => f.id !== id));
@@ -62,9 +134,16 @@ export default function TopBar({ navigate }) {
   // Thêm thẻ vào danh sách
   const handleAddCard = () => {
     // Lưu thẻ hiện tại vào mảng
-    setAddedCards([...addedCards, fields.map(f => ({ label: f.label, value: f.value }))]);
+    setAddedCards([
+      ...addedCards,
+      [
+        ...frontFields.map(f => ({ label: f.label, value: f.value })),
+        ...backFields.map(f => ({ label: f.label, value: f.value }))
+      ]
+    ]);
     // Reset các trường về rỗng
-    setFields(fields.map(f => ({ ...f, value: "" })));
+    setFrontFields(frontFields.map(f => ({ ...f, value: "" })));
+    setBackFields(backFields.map(f => ({ ...f, value: "" })));
   };
   return (
     <header className="flex items-center px-6 py-4 bg-white shadow-sm relative">
@@ -86,7 +165,7 @@ export default function TopBar({ navigate }) {
         />
       </div>
       <div className="ml-4 relative">
-        <button className="px-4 py-2 bg-yellow-400 text-white rounded-full font-semibold hover:bg-yellow-500 transition" onClick={() => setShowAdd(v => !v)}>
+        <button className="px-4 py-2 bg-blue-400 text-white rounded-full font-semibold hover:bg-blue-500 transition" onClick={() => setShowAdd(v => !v)}>
           + Tạo mới
         </button>
         {showAdd && (
@@ -94,48 +173,131 @@ export default function TopBar({ navigate }) {
             <button className="flex items-center gap-2 w-full px-4 py-2 text-gray-700 hover:bg-gray-100 text-left" onClick={e => {
               e.stopPropagation();
               setShowAdd(false);
-              setShowTagToast(true);
+              setshowAddCardModal(true);
             }}>
               <span className="material-icons">style</span> Thẻ
             </button>
-            <button className="flex items-center gap-2 w-full px-4 py-2 text-gray-700 hover:bg-gray-100 text-left" onClick={e => {e.stopPropagation(); setShowAdd(false); navigate(`/add-row`);}}>
-              <span className="material-icons">library_books</span> Học phần
+            <button className="flex items-center gap-2 w-full px-4 py-2 text-gray-700 hover:bg-gray-100 text-left" onClick={e => {e.stopPropagation(); setShowAdd(false); navigate(`/add-cardset`);}}>
+              <span className="material-icons">library_books</span> Bộ thẻ
             </button>
-            <button className="flex items-center gap-2 w-full px-4 py-2 text-gray-700 hover:bg-gray-100 text-left" onClick={e => {e.stopPropagation(); setShowAdd(false); setShowFolderModal(true);}}>
+            <button className="flex items-center gap-2 w-full px-4 py-2 text-gray-700 hover:bg-gray-100 text-left" onClick={e => {e.stopPropagation(); setShowAdd(false); setshowAddFolderModal(true);}}>
               <span className="material-icons">folder</span> Thư mục
             </button>
           </div>
         )}
         {/* Toast cho nút Thẻ */}
-        {showTagToast && (
-          <div className="fixed top-24 left-1/2 -translate-x-1/2 z-50">
-            <div className="bg-white rounded-xl shadow-lg px-6 py-6 flex flex-col gap-4 border min-w-[600px] max-w-[90vw]" style={{maxHeight: '80vh', overflowY: 'auto'}}>
+        {showAddCardModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
+            <div
+              className="bg-white rounded-xl shadow-lg px-6 py-6 flex flex-col gap-4 border relative"
+              style={{
+                width: '1000px',
+                maxWidth: 'calc(100vw - 32px)',
+                minWidth: '600px',
+                maxHeight: '100vh',
+                overflowY: 'auto',
+                marginLeft: 'auto',
+                marginRight: 'auto'
+              }}
+            >
+              {/* Nút đóng ở góc */}
+              <button className="absolute top-4 right-4 text-gray-400 hover:text-gray-700" onClick={() => setshowAddCardModal(false)} title="Đóng">
+                <span className="material-icons text-2xl">close</span>
+              </button>
               {/* Hiển thị số thẻ đã thêm */}
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm text-gray-500">Đã thêm <b>{addedCards.length}</b> thẻ</span>
                 {addedCards.length > 0 && (
-                  <button className="px-3 py-1 rounded bg-blue-100 text-blue-700 text-xs" onClick={() => { setShowTagToast(false); setAddedCards([]); }}>
+                  <button className="px-3 py-1 rounded bg-blue-100 text-blue-700 text-xs" onClick={() => { setshowAddCardModal(false); setAddedCards([]); }}>
                     Đóng & Xem danh sách thẻ
                   </button>
                 )}
               </div>
               {/* Thanh chức năng phía trên */}
               <div className="flex items-center gap-4 mb-2 flex-wrap">
-                {/* Hàng 1: input Kiểu và Bộ thẻ */}
+                {/* Hàng 1: input Kiểu và Thư mục */}
                 <div className="flex w-full gap-4 mb-2">
-                  <div className="flex flex-col" style={{flex: 4}}>
+                  <div className="flex flex-col relative" style={{flex: 4.5}}>
                     <label className="text-xs text-gray-500 mb-1">Kiểu</label>
-                    <input className="px-2 py-1 rounded border text-sm w-full min-w-0" defaultValue="Cơ bản (thẻ ngược tuỳ chọn)" />
+                    <button
+                      className="px-2 py-1 rounded border text-sm w-full min-w-0 bg-white text-left"
+                      onClick={() => setShowTypeModal(true)}
+                    >
+                      {selectedCardType}
+                    </button>
+                    {showTypeModal && (
+                      <div className="absolute left-0 top-full mt-2 bg-white rounded-lg shadow-lg border z-50 p-4 flex flex-col w-full overflow-hidden" style={{width: '100%'}}>
+                        <div className="font-semibold mb-2">Chọn Kiểu Phiếu</div>
+                        <input
+                          type="text"
+                          className="w-full mb-2 px-2 py-1 rounded border text-sm"
+                          placeholder="Lọc..."
+                          value={typeFilter}
+                          onChange={e => setTypeFilter(e.target.value)}
+                        />
+                        <div className="border rounded bg-gray-50 mb-2 flex-1" style={{maxHeight: '180px', overflowY: 'auto'}}>
+                          {filteredTypes.map((type, idx) => (
+                            <div
+                              key={idx}
+                              className={`px-3 py-2 cursor-pointer hover:bg-blue-100 ${selectedCardType === type ? 'bg-blue-200 font-semibold' : ''}`}
+                              onClick={() => setSelectedCardType(type)}
+                            >
+                              {type}
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex gap-2 justify-end mt-2 w-full">
+                          <button className="px-3 py-1 rounded bg-blue-500 text-white font-semibold truncate overflow-hidden" style={{width: 80}} onClick={() => setShowTypeModal(false)} title="Chọn">Chọn</button>
+                          <button className="px-3 py-1 rounded bg-gray-200 text-gray-700 font-semibold truncate overflow-hidden" style={{width: 80}} onClick={() => alert('Quản lý kiểu thẻ')} title="Quản lý kiểu thẻ">Quản lý</button>
+                          <button className="px-3 py-1 rounded bg-gray-200 text-gray-700 font-semibold truncate overflow-hidden" style={{width: 80}} onClick={() => setShowTypeModal(false)} title="Cancel">Cancel</button>
+                          <button className="px-3 py-1 rounded bg-gray-200 text-gray-700 font-semibold truncate overflow-hidden" style={{width: 80}} onClick={() => alert('Help!')} title="Help">Help</button>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex flex-col" style={{flex: 6}}>
+                  <div className="flex flex-col relative" style={{flex: 5.5}}>
                     <label className="text-xs text-gray-500 mb-1">Bộ thẻ</label>
-                    <input className="px-2 py-1 rounded border text-sm w-full min-w-0" defaultValue="Japanese Core 2000 Step 01 Listening Sentence Vocab + Images" />
+                    <button
+                      className="px-2 py-1 rounded border text-sm w-full min-w-0 bg-white text-left"
+                      onClick={() => setShowSetModal(true)}
+                    >
+                      {selectedCardSet || "-- Chọn bộ thẻ --"}
+                    </button>
+                    {showSetModal && (
+                      <div className="absolute left-0 top-full mt-2 bg-white rounded-lg shadow-lg border z-50 p-4 flex flex-col" style={{width: '100%'}}>
+                        <div className="font-semibold mb-2">Chọn Bộ thẻ</div>
+                        <input
+                          type="text"
+                          className="w-full mb-2 px-2 py-1 rounded border text-sm"
+                          placeholder="Lọc..."
+                          value={setFilter}
+                          onChange={e => setSetFilter(e.target.value)}
+                        />
+                        <div className="border rounded bg-gray-50 mb-2 flex-1" style={{maxHeight: '180px', overflowY: 'auto'}}>
+                          {filteredSets.map((set, idx) => (
+                            <div
+                              key={idx}
+                              className={`px-3 py-2 cursor-pointer hover:bg-blue-100 ${selectedCardSet === set ? 'bg-blue-200 font-semibold' : ''}`}
+                              onClick={() => setSelectedCardSet(set)}
+                            >
+                              {set}
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex gap-2 justify-end mt-2 w-full">
+                          <button className="px-3 py-1 rounded bg-blue-500 text-white font-semibold truncate overflow-hidden" style={{width: 80}} onClick={() => setShowSetModal(false)} title="Chọn">Chọn</button>
+                          <button className="px-3 py-1 rounded bg-green-500 text-white font-semibold truncate overflow-hidden" style={{width: 80}} onClick={() => alert('Thêm bộ thẻ')} title="Thêm bộ thẻ">Thêm</button>
+                          <button className="px-3 py-1 rounded bg-gray-200 text-gray-700 font-semibold truncate overflow-hidden" style={{width: 80}} onClick={() => setShowSetModal(false)} title="Cancel">Cancel</button>
+                          <button className="px-3 py-1 rounded bg-gray-200 text-gray-700 font-semibold truncate overflow-hidden" style={{width: 80}} onClick={() => alert('Help!')} title="Help">Help</button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
                 {/* Hàng 2: các nút chức năng */}
                 <div className="flex gap-2 flex-wrap w-full">
-                  <button className="px-3 py-1 rounded bg-gray-100 text-gray-700 font-semibold flex items-center gap-1 text-sm"><span className="material-icons">info</span>Trường tin...</button>
-                  <button className="px-3 py-1 rounded bg-gray-100 text-gray-700 font-semibold flex items-center gap-1 text-sm"><span className="material-icons">style</span>Thẻ...</button>
+                  <button className="px-3 py-1 rounded bg-gray-100 text-gray-700 font-semibold flex items-center gap-1 text-sm"><span className="material-icons">info</span>Tùy chỉnh trường tin</button>
+                  <button className="px-3 py-1 rounded bg-gray-100 text-gray-700 font-semibold flex items-center gap-1 text-sm"><span className="material-icons">style</span>Tùy chỉnh mẫu thẻ</button>
                 </div>
               </div>
               {/* Thanh nút chức năng định dạng */}
@@ -143,72 +305,121 @@ export default function TopBar({ navigate }) {
                 <button className="px-2 py-1 rounded bg-gray-100 text-gray-700" title="Đậm"><b>B</b></button>
                 <button className="px-2 py-1 rounded bg-gray-100 text-gray-700" title="Nghiêng"><i>I</i></button>
                 <button className="px-2 py-1 rounded bg-gray-100 text-gray-700" title="Gạch dưới"><u>U</u></button>
-                <button className="px-2 py-1 rounded bg-gray-100 text-gray-700" title="Gạch ngang"><span style={{textDecoration: 'line-through'}}>S</span></button>
+                {/* <button className="px-2 py-1 rounded bg-gray-100 text-gray-700" title="Gạch ngang"><span style={{textDecoration: 'line-through'}}>S</span></button>
                 <button className="px-2 py-1 rounded bg-gray-100 text-gray-700" title="Cỡ chữ nhỏ">x<sub>2</sub></button>
                 <button className="px-2 py-1 rounded bg-gray-100 text-gray-700" title="Cỡ chữ lớn">A</button>
-                <button className="px-2 py-1 rounded bg-gray-100 text-gray-700" title="Màu sắc"><span className="material-icons">format_color_fill</span></button>
+                <button className="px-2 py-1 rounded bg-gray-100 text-gray-700" title="Màu sắc"><span className="material-icons">format_color_fill</span></button> */}
                 <button className="px-2 py-1 rounded bg-gray-100 text-gray-700" title="Chèn hình"><span className="material-icons">image</span></button>
                 <button className="px-2 py-1 rounded bg-gray-100 text-gray-700" title="Chèn âm thanh"><span className="material-icons">mic</span></button>
                 <button className="px-2 py-1 rounded bg-gray-100 text-gray-700" title="Chèn file"><span className="material-icons">attach_file</span></button>
-                <button className="px-2 py-1 rounded bg-gray-100 text-gray-700" title="Chèn công thức"><span className="material-icons">functions</span></button>
+                {/* <button className="px-2 py-1 rounded bg-gray-100 text-gray-700" title="Chèn công thức"><span className="material-icons">functions</span></button> */}
               </div>
               {/* Các trường nhập động */}
               <div className="flex flex-col gap-2 mb-2">
-                {fields.map((field, idx) => (
-                  <div key={field.id} className="flex items-center gap-2">
-                    <input
-                      className="w-full px-4 py-2 rounded border text-lg"
-                      placeholder={field.label}
-                      value={field.value}
-                      onChange={e => updateField(field.id, e.target.value)}
-                    />
-                    {fields.length > 1 && (
-                      <button className="px-2 py-1 rounded bg-red-100 text-red-600 text-xs" title="Xóa trường" onClick={() => removeField(field.id)}>
-                        <span className="material-icons">close</span>
-                      </button>
-                    )}
-                  </div>
-                ))}
-                <button className="px-3 py-1 rounded bg-green-100 text-green-700 font-semibold mt-2 w-fit" onClick={addField}>
-                  + Thêm trường
-                </button>
+                {/* Mặt trước */}
+                <div className="mb-2">
+                  <div className="font-semibold text-gray-700 mb-1">Mặt trước</div>
+                  {frontFields.map((field, idx) => (
+                    <div key={field.id} className="flex items-center gap-2 mb-2">
+                      <input
+                        className="w-full px-4 py-2 rounded border text-lg"
+                        placeholder={field.label}
+                        value={field.value}
+                        onChange={e => updateFrontField(field.id, e.target.value)}
+                      />
+                      {idx > 0 && (
+                        <button className="px-2 py-1 rounded bg-red-100 text-red-600 text-xs" title="Xóa trường" onClick={() => removeFrontField(field.id)}>
+                          <span className="material-icons">close</span>
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <button className="px-3 py-1 rounded bg-blue-100 text-blue-700 font-semibold mb-2 w-fit self-center" onClick={addFrontField}>
+                    + Thêm trường cho mặt trước
+                  </button>
+                  <hr className="my-2 border-gray-300" />
+                </div>
+                {/* Mặt sau */}
+                <div className="mb-2">
+                  <div className="font-semibold text-gray-700 mb-1">Mặt sau</div>
+                  {backFields.map((field, idx) => (
+                    <div key={field.id} className="flex items-center gap-2 mb-2">
+                      <input
+                        className="w-full px-4 py-2 rounded border text-lg"
+                        placeholder={field.label}
+                        value={field.value}
+                        onChange={e => updateBackField(field.id, e.target.value)}
+                      />
+                      {idx > 0 && (
+                        <button className="px-2 py-1 rounded bg-red-100 text-red-600 text-xs" title="Xóa trường" onClick={() => removeBackField(field.id)}>
+                          <span className="material-icons">close</span>
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <button className="px-3 py-1 rounded bg-blue-100 text-blue-700 font-semibold mb-2 w-fit self-center" onClick={addBackField}>
+                    + Thêm trường cho mặt sau
+                  </button>
+                  <hr className="my-2 border-gray-300" />
+                </div>
               </div>
               <div className="flex justify-end gap-4 mt-2">
-                <button className="px-6 py-2 rounded bg-gray-200 text-gray-700 font-semibold" onClick={() => setShowTagToast(false)}>Đóng</button>
-                <button className="px-6 py-2 rounded bg-blue-500 text-white font-semibold" onClick={handleAddCard}>Thêm</button>
+                <button className="px-6 py-2 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold" onClick={() => setshowAddCardModal(false)}>Đóng</button>
+                <button
+                  className={`px-6 py-2 rounded font-semibold ${frontFields[0].value ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+                  disabled={!frontFields[0].value}
+                  onClick={handleAddCard}
+                >Thêm</button>
               </div>
             </div>
           </div>
         )}
-      {/* Modal tạo thư mục */}
-      {showFolderModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
-          <div className="bg-white rounded-xl shadow-lg p-8 w-[400px] flex flex-col items-center relative">
-            <span className="material-icons text-5xl text-gray-500 mb-4">folder</span>
-            <input
-              type="text"
-              className="w-full text-center text-lg font-semibold mb-6 px-4 py-2 bg-gray-100 rounded focus:outline-none"
-              placeholder="Đặt tên cho thư mục của bạn"
-              value={folderName}
-              onChange={e => setFolderName(e.target.value)}
-            />
-            <div className="flex gap-4 mt-2">
-              <button className="px-6 py-2 rounded bg-gray-100 text-gray-600 font-semibold" onClick={() => { setShowFolderModal(false); setFolderName(""); }}>Hủy</button>
-              <button
-                className={`px-6 py-2 rounded font-semibold ${folderName ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
-                disabled={!folderName}
-                onClick={() => {
-                  // Tạo folder object với id và tên, chuyển hướng sang màn hình folder
-                  const folderId = Date.now().toString(); // Tạo id đơn giản
-                  setShowFolderModal(false);
-                  setFolderName("");
-                  navigate(`/folder/${folderId}`, { state: { folderName } });
-                }}
-              >Tạo</button>
+        {/* Modal tạo Thư mục */}
+        {showAddFolderModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
+            <div className="bg-white rounded-xl shadow-lg p-8 w-[400px] flex flex-col items-center relative">
+              <span className="material-icons text-5xl text-gray-500 mb-4">folder</span>
+              <input
+                type="text"
+                className="w-full text-center text-lg font-semibold mb-6 px-4 py-2 bg-gray-100 rounded focus:outline-none"
+                placeholder="Đặt tên cho Thư mục của bạn"
+                value={folderName}
+                onChange={e => setFolderName(e.target.value)}
+              />
+              <div className="flex gap-4 mt-2">
+                <button className="px-6 py-2 rounded bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold" onClick={() => { setshowAddFolderModal(false); setFolderName(""); }}>Hủy</button>
+                <button
+                  className={`px-6 py-2 rounded font-semibold ${folderName ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+                  disabled={!folderName}
+                  onClick={async () => {
+                    if (!userId) {
+                      alert("Không tìm thấy userId!");
+                      return;
+                    }
+                    // Gọi API tạo folder
+                    try {
+                      const res = await fetch("http://localhost:5001/api/folders", {
+                        method: "POST",
+                        headers: {
+                          "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({ name: folderName, userId })
+                      });
+                      if (!res.ok) throw new Error("Tạo thư mục thất bại");
+                      const folder = await res.json();
+                      setshowAddFolderModal(false);
+                      setFolderName("");
+                      // Chuyển hướng với path user/userid/folder/folderid
+                      navigate(`/user/${userName}/folder/${folder._id}`, { state: { folderName: folder.name } });
+                    } catch (err) {
+                      alert("Lỗi: " + err.message);
+                    }
+                  }}
+                >Tạo</button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
       </div>
       <div className="ml-4 relative">
         <div ref={menuRef} className="w-8 h-8 rounded-full bg-gray-300 overflow-hidden cursor-pointer" onClick={() => setShowMenu(v => !v)}>

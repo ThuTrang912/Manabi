@@ -2,7 +2,7 @@ import TopBar from "../components/TopBar";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-export default function AddRowPage() {
+export default function AddCardSetPage() {
   const [title, setTitle] = useState("");
   const [desc, setDesc] = useState("");
   const [rows, setRows] = useState([
@@ -25,7 +25,7 @@ export default function AddRowPage() {
     <div className="min-h-screen bg-gray-50">
       <TopBar navigate={navigate} />
       <div className="max-w-3xl mx-auto mt-8 bg-white rounded-2xl shadow p-8">
-        <h2 className="text-2xl font-bold mb-2">Tạo một học phần mới</h2>
+        <h2 className="text-2xl font-bold mb-2">Tạo một Bộ thẻ mới</h2>
         <div className="mb-4 text-gray-500 text-sm">Đã lưu chưa đầy 1 phút trước</div>
         <input
           className="w-full mb-4 px-4 py-2 rounded border text-lg"

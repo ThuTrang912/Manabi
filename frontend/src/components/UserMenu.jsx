@@ -19,7 +19,7 @@ export default function UserMenu({ avatarUrl, userName, userEmail, setShowMenu }
         <button
           className="text-left py-2 px-3 hover:bg-gray-100 rounded text-gray-700 flex items-center gap-2"
           onClick={() => {
-            localStorage.removeItem('auth_token');
+            localStorage.clear();
             window.location.replace('/');
           }}
         >

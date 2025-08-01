@@ -5,7 +5,7 @@ import LoginPage from "./pages/LoginPage.jsx";
 import HomePage from "./pages/HomePage.jsx";
 import SignupPage from "./pages/SignupPage.jsx";
 import FolderPage from "./pages/FolderPage.jsx";
-import AddRowPage from "./pages/AddRowPage";
+import AddCardSetPage from "./pages/AddCardSetPage.jsx";
 import { Navigate } from "react-router-dom";
 
 function PrivateRoute({ children }) {
@@ -30,9 +30,14 @@ function App() {
             <FolderPage />
           </PrivateRoute>
         } />
-        <Route path="/add-row" element={
+        <Route path="/user/:userName/folder/:folderId" element={
           <PrivateRoute>
-            <AddRowPage />
+            <FolderPage />
+          </PrivateRoute>
+        } />
+        <Route path="/add-cardset" element={
+          <PrivateRoute>
+            <AddCardSetPage />
           </PrivateRoute>
         } />
         <Route path="/signup" element={<SignupPage />} />
