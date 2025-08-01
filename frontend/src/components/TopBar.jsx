@@ -65,10 +65,15 @@ export default function TopBar({ navigate }) {
   // State for selected type/set, default to last used or first
   // Modal chọn bộ thẻ
   const [showSetModal, setShowSetModal] = React.useState(false);
+   // Modal state for adding a new card set
+  const [showAddSetModal, setShowAddSetModal] = React.useState(false);
+  const [newSetName, setNewSetName] = React.useState("");
   const [setFilter, setSetFilter] = React.useState("");
   const filteredSets = cardSetOptions.filter(set => set.toLowerCase().includes(setFilter.toLowerCase()));
+
   // Modal chọn kiểu thẻ
   const [showTypeModal, setShowTypeModal] = React.useState(false);
+  const [showTypeManagerModal, setShowTypeManagerModal] = React.useState(false);
   const [typeFilter, setTypeFilter] = React.useState("");
   const filteredTypes = cardTypeOptions.filter(type => type.toLowerCase().includes(typeFilter.toLowerCase()));
   const [selectedCardType, setSelectedCardType] = React.useState(() => {
@@ -227,31 +232,78 @@ export default function TopBar({ navigate }) {
                     </button>
                     {showTypeModal && (
                       <div className="absolute left-0 top-full mt-2 bg-white rounded-lg shadow-lg border z-50 p-4 flex flex-col w-full overflow-hidden" style={{width: '100%'}}>
-                        <div className="font-semibold mb-2">Chọn Kiểu Phiếu</div>
-                        <input
-                          type="text"
-                          className="w-full mb-2 px-2 py-1 rounded border text-sm"
-                          placeholder="Lọc..."
-                          value={typeFilter}
-                          onChange={e => setTypeFilter(e.target.value)}
-                        />
-                        <div className="border rounded bg-gray-50 mb-2 flex-1" style={{maxHeight: '180px', overflowY: 'auto'}}>
-                          {filteredTypes.map((type, idx) => (
-                            <div
-                              key={idx}
-                              className={`px-3 py-2 cursor-pointer hover:bg-blue-100 ${selectedCardType === type ? 'bg-blue-200 font-semibold' : ''}`}
-                              onClick={() => setSelectedCardType(type)}
-                            >
-                              {type}
+                        {showTypeManagerModal ? (
+                          <>
+                            <div className="font-semibold mb-2">Các Kiểu Phiếu</div>
+                            <div className="bg-white rounded-xl shadow-lg p-4 flex flex-row gap-4 relative border w-full" style={{minHeight: 320, maxHeight: 400}}>
+                              {/* Danh sách kiểu phiếu */}
+                              <div className="flex-1 flex flex-col">                                
+                                <div className="border rounded bg-gray-50 flex-1 mb-2 overflow-y-auto" style={{minWidth: 100, maxWidth: 230, minHeight: 200, maxHeight: 260}}>
+                                  <ul className="w-full">
+                                    {cardTypeOptions.map((type, idx) => (
+                                      <li
+                                        key={idx}
+                                        className={`px-3 py-2 cursor-pointer hover:bg-blue-100 ${selectedCardType === type ? 'bg-blue-200 font-semibold' : ''}`}
+                                        onClick={() => setSelectedCardType(type)}
+                                      >
+                                        {type} {idx === 0 && <span className="text-xs text-gray-400">[41 phiếu]</span>}
+                                        {idx === 1 && <span className="text-xs text-gray-400">[5 phiếu]</span>}
+                                        {idx === 2 && <span className="text-xs text-gray-400">[0 phiếu]</span>}
+                                        {idx === 3 && <span className="text-xs text-gray-400">[2 phiếu]</span>}
+                                        {idx === 4 && <span className="text-xs text-gray-400">[0 phiếu]</span>}
+                                        {idx === 5 && <span className="text-xs text-gray-400">[200 phiếu]</span>}
+                                        {idx === 6 && <span className="text-xs text-gray-400">[200 phiếu]</span>}
+                                        {idx === 7 && <span className="text-xs text-gray-400">[0 phiếu]</span>}
+                                        {idx === 8 && <span className="text-xs text-gray-400">[0 phiếu]</span>}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              </div>
+                              {/* Cột nút chức năng */}
+                              <div className="flex flex-col gap-2 justify-start" style={{width:120, flexShrink: 0}}>
+                                <button className="px-3 py-1 rounded bg-gray-200 text-gray-700 font-semibold truncate overflow-hidden w-24" style={{width: 105}} onClick={() => alert('Thêm')}>Thêm</button>
+                                <button className="px-3 py-1 rounded bg-gray-200 text-gray-700 font-semibold truncate overflow-hidden w-24" style={{width: 105}} onClick={() => alert('Đổi tên')}>Đổi tên</button>
+                                <button className="px-3 py-1 rounded bg-gray-200 text-gray-700 font-semibold truncate overflow-hidden w-24" style={{width: 105}} onClick={() => alert('Xóa')}>Xóa</button>
+                                <button className="px-3 py-1 rounded bg-gray-200 text-gray-700 font-semibold truncate overflow-hidden w-24" style={{width: 105}} onClick={() => alert('Tùy chọn')}>Tùy chọn...</button>
+                                <button className="px-3 py-1 rounded bg-gray-200 text-gray-700 font-semibold truncate overflow-hidden w-24" style={{width: 105}} onClick={() => setShowTypeManagerModal(false)}>Close</button>
+                                <button className="px-3 py-1 rounded bg-gray-200 text-gray-700 font-semibold truncate overflow-hidden w-24" style={{width: 105}} onClick={() => alert('Help')}>Help</button>
+                              </div>
+                              {/* Nút đóng góc
+                              <button className="absolute top-2 right-2 text-gray-400 hover:text-gray-700" onClick={() => setShowTypeManagerModal(false)} title="Đóng">
+                                <span className="material-icons text-2xl">close</span>
+                              </button> */}
                             </div>
-                          ))}
-                        </div>
-                        <div className="flex gap-2 justify-end mt-2 w-full">
-                          <button className="px-3 py-1 rounded bg-blue-500 text-white font-semibold truncate overflow-hidden" style={{width: 80}} onClick={() => setShowTypeModal(false)} title="Chọn">Chọn</button>
-                          <button className="px-3 py-1 rounded bg-gray-200 text-gray-700 font-semibold truncate overflow-hidden" style={{width: 80}} onClick={() => alert('Quản lý kiểu thẻ')} title="Quản lý kiểu thẻ">Quản lý</button>
-                          <button className="px-3 py-1 rounded bg-gray-200 text-gray-700 font-semibold truncate overflow-hidden" style={{width: 80}} onClick={() => setShowTypeModal(false)} title="Cancel">Cancel</button>
-                          <button className="px-3 py-1 rounded bg-gray-200 text-gray-700 font-semibold truncate overflow-hidden" style={{width: 80}} onClick={() => alert('Help!')} title="Help">Help</button>
-                        </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="font-semibold mb-2">Chọn Kiểu Phiếu</div>
+                            <input
+                              type="text"
+                              className="w-full mb-2 px-2 py-1 rounded border text-sm"
+                              placeholder="Lọc..."
+                              value={typeFilter}
+                              onChange={e => setTypeFilter(e.target.value)}
+                            />
+                            <div className="border rounded bg-gray-50 mb-2 flex-1" style={{maxHeight: '180px', overflowY: 'auto'}}>
+                              {filteredTypes.map((type, idx) => (
+                                <div
+                                  key={idx}
+                                  className={`px-3 py-2 cursor-pointer hover:bg-blue-100 ${selectedCardType === type ? 'bg-blue-200 font-semibold' : ''}`}
+                                  onClick={() => setSelectedCardType(type)}
+                                >
+                                  {type}
+                                </div>
+                              ))}
+                            </div>
+                            <div className="flex gap-2 justify-end mt-2 w-full">
+                              <button className="px-3 py-1 rounded bg-blue-500 text-white font-semibold truncate overflow-hidden" style={{width: 80}} onClick={() => setShowTypeModal(false)} title="Chọn">Chọn</button>
+                              <button className="px-3 py-1 rounded bg-gray-100 text-gray-700 font-semibold truncate overflow-hidden hover:bg-gray-200" style={{width: 80}} onClick={() => setShowTypeManagerModal(true)} title="Quản lý kiểu thẻ">Quản lý</button>
+                              <button className="px-3 py-1 rounded bg-gray-100 text-gray-700 font-semibold truncate overflow-hidden hover:bg-gray-200" style={{width: 80}} onClick={() => setShowTypeModal(false)} title="Cancel">Cancel</button>
+                              <button className="px-3 py-1 rounded bg-gray-100 text-gray-700 font-semibold truncate overflow-hidden hover:bg-gray-200" style={{width: 80}} onClick={() => alert('Help!')} title="Help">Help</button>
+                            </div>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>
@@ -265,31 +317,77 @@ export default function TopBar({ navigate }) {
                     </button>
                     {showSetModal && (
                       <div className="absolute left-0 top-full mt-2 bg-white rounded-lg shadow-lg border z-50 p-4 flex flex-col" style={{width: '100%'}}>
-                        <div className="font-semibold mb-2">Chọn Bộ thẻ</div>
-                        <input
-                          type="text"
-                          className="w-full mb-2 px-2 py-1 rounded border text-sm"
-                          placeholder="Lọc..."
-                          value={setFilter}
-                          onChange={e => setSetFilter(e.target.value)}
-                        />
-                        <div className="border rounded bg-gray-50 mb-2 flex-1" style={{maxHeight: '180px', overflowY: 'auto'}}>
-                          {filteredSets.map((set, idx) => (
-                            <div
-                              key={idx}
-                              className={`px-3 py-2 cursor-pointer hover:bg-blue-100 ${selectedCardSet === set ? 'bg-blue-200 font-semibold' : ''}`}
-                              onClick={() => setSelectedCardSet(set)}
-                            >
-                              {set}
+                        {showAddSetModal ? (
+                          <>
+                            <div className="font-semibold mb-2">Tạo Bộ thẻ</div>
+                            <div className="bg-white rounded-xl shadow-lg p-6 flex flex-col items-center relative border w-full" >
+                              {/* <div className="font-semibold text-lg mb-4 flex items-center gap-2">
+                                <span className="material-icons text-3xl text-blue-400">library_books</span>
+                                Tạo Bộ thẻ
+                              </div> */}
+                              <label className="w-full text-sm mb-2 text-left">Tên bộ thẻ mới:</label>
+                              <input
+                                type="text"
+                                className="w-full mb-6 px-3 py-2 rounded border text-base focus:outline-none"
+                                value={newSetName}
+                                onChange={e => setNewSetName(e.target.value)}
+                                autoFocus
+                              />
+                              <div className="flex gap-4 justify-end w-full">
+                                <button
+                                  className="px-6 py-1 rounded bg-blue-500 text-white font-semibold hover:bg-blue-600"
+                                  disabled={!newSetName.trim()}
+                                  onClick={() => {
+                                    if (!newSetName.trim()) return;
+                                    // Add to cardSetOptions (dummy, replace with API if needed)
+                                    if (!cardSetOptions.includes(newSetName.trim())) {
+                                      cardSetOptions.unshift(newSetName.trim());
+                                    }
+                                    setSelectedCardSet(newSetName.trim());
+                                    setShowAddSetModal(false);
+                                    setNewSetName("");
+                                  }}
+                                >OK</button>
+                                <button
+                                  className="px-6 py-1 rounded bg-gray-100 text-gray-700 font-semibold hover:bg-gray-200"
+                                  onClick={() => {
+                                    setShowAddSetModal(false);
+                                    setNewSetName("");
+                                  }}
+                                >Cancel</button>
                             </div>
-                          ))}
-                        </div>
-                        <div className="flex gap-2 justify-end mt-2 w-full">
-                          <button className="px-3 py-1 rounded bg-blue-500 text-white font-semibold truncate overflow-hidden" style={{width: 80}} onClick={() => setShowSetModal(false)} title="Chọn">Chọn</button>
-                          <button className="px-3 py-1 rounded bg-green-500 text-white font-semibold truncate overflow-hidden" style={{width: 80}} onClick={() => alert('Thêm bộ thẻ')} title="Thêm bộ thẻ">Thêm</button>
-                          <button className="px-3 py-1 rounded bg-gray-200 text-gray-700 font-semibold truncate overflow-hidden" style={{width: 80}} onClick={() => setShowSetModal(false)} title="Cancel">Cancel</button>
-                          <button className="px-3 py-1 rounded bg-gray-200 text-gray-700 font-semibold truncate overflow-hidden" style={{width: 80}} onClick={() => alert('Help!')} title="Help">Help</button>
-                        </div>
+                            </div>
+                          </>
+                        ):(
+                          <>
+                            <div className="font-semibold mb-2">Chọn Bộ thẻ</div>
+                            <input
+                              type="text"
+                              className="w-full mb-2 px-2 py-1 rounded border text-sm"
+                              placeholder="Lọc..."
+                              value={setFilter}
+                              onChange={e => setSetFilter(e.target.value)}
+                            />
+                            <div className="border rounded bg-gray-50 mb-2 flex-1" style={{maxHeight: '180px', overflowY: 'auto'}}>
+                              {filteredSets.map((set, idx) => (
+                                <div
+                                  key={idx}
+                                  className={`px-3 py-2 cursor-pointer hover:bg-blue-100 ${selectedCardSet === set ? 'bg-blue-200 font-semibold' : ''}`}
+                                  onClick={() => setSelectedCardSet(set)}
+                                >
+                                  {set}
+                                </div>
+                              ))}
+                            </div>
+                            <div className="flex gap-2 justify-end mt-2 w-full">
+                              <button className="px-3 py-1 rounded bg-blue-500 text-white font-semibold truncate overflow-hidden" style={{width: 80}} onClick={() => setShowSetModal(false)} title="Chọn">Chọn</button>
+                              <button className="px-3 py-1 rounded bg-green-500 text-white font-semibold truncate overflow-hidden" style={{width: 80}} onClick={() => setShowAddSetModal(true)} title="Thêm bộ thẻ">Thêm</button>
+                              <button className="px-3 py-1 rounded bg-gray-200 text-gray-700 font-semibold truncate overflow-hidden" style={{width: 80}} onClick={() => setShowSetModal(false)} title="Cancel">Cancel</button>
+                              <button className="px-3 py-1 rounded bg-gray-200 text-gray-700 font-semibold truncate overflow-hidden" style={{width: 80}} onClick={() => alert('Help!')} title="Help">Help</button>
+                            </div>
+                          </>
+                        )}
+
                       </div>
                     )}
                   </div>
@@ -417,6 +515,10 @@ export default function TopBar({ navigate }) {
                   }}
                 >Tạo</button>
               </div>
+              {/* Nút đóng góc */}
+              <button className="absolute top-2 right-2 text-gray-400 hover:text-gray-700" onClick={() => setshowAddFolderModal(false)} title="Đóng">
+                <span className="material-icons text-2xl">close</span>
+              </button>
             </div>
           </div>
         )}
