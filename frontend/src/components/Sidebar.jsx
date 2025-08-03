@@ -36,8 +36,18 @@ export default function Sidebar({ navigate }) {
             Trang chủ
           </span>
         </div>
-        <div className="text-gray-700 flex items-center gap-2 cursor-pointer hover:bg-gray-100 rounded px-2 py-1">
-          <span className="material-icons">library_books</span> Thư viện của bạn
+        <div
+          className="text-gray-700 flex items-center gap-2 cursor-pointer hover:bg-gray-100 rounded px-2 py-1"
+          onClick={() => {
+            setShowSidebar(false);
+            // Lấy userName từ localStorage hoặc props tuỳ vào app
+            let userName = localStorage.getItem('userName');
+            if (!userName && window.userName) userName = window.userName;
+            if (!userName) userName = 'me'; // fallback nếu không có user
+            if (navigate) navigate(`/user/${userName}/sets`);
+          }}
+        >
+          <span className="material-icons">folder_open</span> Thư viện của bạn
         </div>
         <div className="text-gray-700 flex items-center gap-2 cursor-pointer hover:bg-gray-100 rounded px-2 py-1">
           <span className="material-icons">notifications</span> Thông báo
