@@ -8,6 +8,7 @@ import SignupPage from "./pages/SignupPage.jsx";
 import FolderPage from "./pages/FolderPage.jsx";
 import AddCardSetPage from "./pages/AddCardSetPage.jsx";
 import LibraryPage from "./pages/LibraryPage";
+import CardStudyPage from "./pages/CardStudyPage.jsx";
 import { Navigate } from "react-router-dom";
 
 function PrivateRoute({ children }) {
@@ -45,6 +46,11 @@ function App() {
         <Route path="/add-cardset" element={
           <PrivateRoute>
             <AddCardSetPage />
+          </PrivateRoute>
+        } />
+        <Route path="/cardset/:cardsetId/study" element={
+          <PrivateRoute>
+            <CardStudyPage />
           </PrivateRoute>
         } />
         <Route path="/signup" element={<SignupPage />} />

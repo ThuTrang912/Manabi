@@ -54,7 +54,7 @@ export default function Signup() {
   return (
     <div className="min-h-screen flex bg-gray-100">
       {/* Bên trái */}
-      <div className="flex-1 flex flex-col justify-center items-center bg-purple-200">
+      <div className="flex-1 flex flex-col justify-center items-center bg-blue-200">
         <h2 className="text-2xl font-semibold text-gray-700 mb-8 text-center">
           最高の勉強法です。無料で新規登録してください。
         </h2>
@@ -116,7 +116,7 @@ export default function Signup() {
           />
           <div className="mb-2 flex items-center">
             <input type="checkbox" name="agree" checked={form.agree} onChange={handleChange} className="mr-2" />
-            <span>私はQuizletのサービス利用規約とプライバシーポリシーに同意します</span>
+            <span>私はManabiのサービス利用規約とプライバシーポリシーに同意します</span>
           </div>
           {error && <div className="text-red-500 mb-2 text-sm">{error}</div>}
           <button type="submit" className="w-full py-2 bg-indigo-600 text-white rounded font-semibold hover:bg-indigo-700 transition mb-2">

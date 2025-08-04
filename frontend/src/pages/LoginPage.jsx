@@ -58,7 +58,7 @@ export default function Login() {
   return (
     <div className="min-h-screen flex bg-gray-100">
       {/* Bên trái */}
-      <div className="flex-1 flex flex-col justify-center items-center bg-purple-200">
+      <div className="flex-1 flex flex-col justify-center items-center bg-blue-200">
         <h2 className="text-2xl font-semibold text-gray-700 mb-8 text-center">
           自宅でリラックスしながら、本格的に学べます。
         </h2>
