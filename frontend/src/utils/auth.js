@@ -10,11 +10,10 @@ export function getUserFromToken(tokenKey = "auth_token") {
       user.userName = payload.name || "";
       user.userEmail = payload.email || "";
       user.userId = payload._id || payload.id || payload.userId || "";
-      const defaultAvatar =
-        "https://ui-avatars.com/api/?name=" +
-        encodeURIComponent(user.userName || user.userEmail) +
-        "&background=cccccc&color=555555&size=96";
-      user.avatarUrl = payload.avatar || defaultAvatar;
+      // Avatar đã được tạo sẵn từ backend, không cần tạo lại
+      user.avatarUrl =
+        payload.avatar ||
+        "https://ui-avatars.com/api/?name=User&background=cccccc&color=555555&size=96";
     } catch {}
   }
   return user;

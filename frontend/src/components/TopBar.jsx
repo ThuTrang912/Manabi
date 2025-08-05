@@ -20,18 +20,18 @@ export default function TopBar({ navigate }) {
       userName = payload.name || "";
       userEmail = payload.email || "";
       userId = payload._id || payload.id || payload.userId || "";
-      const defaultAvatar = "https://ui-avatars.com/api/?name=" + encodeURIComponent(userName || userEmail) + "&background=cccccc&color=555555&size=96";
-      avatarUrl = payload.avatar || defaultAvatar;
+      // Avatar đã được tạo sẵn từ backend, không cần tạo lại
+      avatarUrl = payload.avatar || "https://ui-avatars.com/api/?name=User&background=cccccc&color=555555&size=96";
     } catch (e) {
-      const defaultAvatar = "https://ui-avatars.com/api/?name=User&background=cccccc&color=555555&size=96";
-      avatarUrl = defaultAvatar;
+      // Fallback avatar cho trường hợp lỗi
+      avatarUrl = "https://ui-avatars.com/api/?name=User&background=cccccc&color=555555&size=96";
       userName = "";
       userEmail = "";
       userId = "";
     }
   } else {
-    const defaultAvatar = "https://ui-avatars.com/api/?name=User&background=cccccc&color=555555&size=96";
-    avatarUrl = defaultAvatar;
+    // Fallback avatar cho trường hợp chưa đăng nhập
+    avatarUrl = "https://ui-avatars.com/api/?name=User&background=cccccc&color=555555&size=96";
     userId = "";
   }
   // UI state
