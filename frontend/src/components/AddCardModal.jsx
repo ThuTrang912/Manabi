@@ -1,7 +1,7 @@
 
 import React from "react";
 
-export default function AddCardModal({ onClose, currentCardSet }) {
+export default function AddCardModal({ onClose, currentCardSet, cardSetId }) {
   // All state and handlers are now internal
   // Modal chỉnh sửa mẫu thẻ
   const [showTemplateEditor, setShowTemplateEditor] = React.useState(false);
@@ -30,7 +30,9 @@ export default function AddCardModal({ onClose, currentCardSet }) {
 
   const [addedCards, setAddedCards] = React.useState([]);
   const [cardTypeOptions] = React.useState(cardTypeOptionsDefault);
-  const [cardSetOptions] = React.useState(cardSetOptionsDefault);
+  const [cardSetOptions, setCardSetOptions] = React.useState([]);
+  const [cardSetsData, setCardSetsData] = React.useState([]); // Store full card set objects
+  const [loadingCardSets, setLoadingCardSets] = React.useState(false);
   const [showTypeModal, setShowTypeModal] = React.useState(false);
   const [showTypeManagerModal, setShowTypeManagerModal] = React.useState(false);
   const [typeFilter, setTypeFilter] = React.useState("");
@@ -45,8 +47,60 @@ export default function AddCardModal({ onClose, currentCardSet }) {
   const filteredSets = cardSetOptions.filter(set => set.toLowerCase().includes(setFilter.toLowerCase()));
   const [selectedCardSet, setSelectedCardSet] = React.useState(() => {
     if (currentCardSet) return currentCardSet;
-    return localStorage.getItem("lastCardSet") || cardSetOptionsDefault[0];
+    return localStorage.getItem("lastCardSet") || "";
   });
+  
+  // Ensure currentCardSet is always used when provided
+  React.useEffect(() => {
+    if (currentCardSet) {
+      setSelectedCardSet(currentCardSet);
+    }
+  }, [currentCardSet]);
+  
+  // Load card sets from database
+  React.useEffect(() => {
+    fetchCardSets();
+  }, []);
+  
+  const fetchCardSets = async () => {
+    setLoadingCardSets(true);
+    try {
+      const token = localStorage.getItem("auth_token");
+      
+      if (!token) {
+        console.log("No auth token found");
+        setLoadingCardSets(false);
+        return;
+      }
+
+      const response = await fetch("http://localhost:5001/api/cards/sets", {
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch card sets");
+      }
+
+      const data = await response.json();
+      const cardSetNames = data.cardSets.map(set => set.name);
+      setCardSetOptions(cardSetNames);
+      setCardSetsData(data.cardSets); // Store full objects for ID lookup
+      
+      // If no currentCardSet is provided and we have card sets, set the first one as default
+      if (!currentCardSet && cardSetNames.length > 0 && !localStorage.getItem("lastCardSet")) {
+        setSelectedCardSet(cardSetNames[0]);
+      }
+      
+    } catch (error) {
+      console.error("Error fetching card sets:", error);
+      // Fallback to empty array if error
+      setCardSetOptions([]);
+    } finally {
+      setLoadingCardSets(false);
+    }
+  };
   React.useEffect(() => {
     localStorage.setItem("lastCardType", selectedCardType);
   }, [selectedCardType]);
@@ -88,6 +142,7 @@ export default function AddCardModal({ onClose, currentCardSet }) {
     setBackFields(backFields.map(f => f.id === id ? { ...f, value } : f));
   };
   const handleAddCard = () => {
+    // Add to local state only - user will save all at once
     setAddedCards([
       ...addedCards,
       [
@@ -95,8 +150,301 @@ export default function AddCardModal({ onClose, currentCardSet }) {
         ...backFields.map(f => ({ label: f.label, value: f.value }))
       ]
     ]);
+    
+    // Clear input fields
     setFrontFields(frontFields.map(f => ({ ...f, value: "" })));
     setBackFields(backFields.map(f => ({ ...f, value: "" })));
+  };
+
+  const saveCardToDatabase = async () => {
+    try {
+      const token = localStorage.getItem("auth_token");
+      
+      if (!token) {
+        alert("Vui lòng đăng nhập trước khi thêm thẻ");
+        return;
+      }
+
+      let targetCardSetId = cardSetId;
+
+      // If no cardSetId provided, find it from selectedCardSet name or currentCardSet
+      if (!targetCardSetId) {
+        const cardSetName = selectedCardSet || currentCardSet;
+        console.log("Trying to find card set with name:", cardSetName);
+        console.log("Available card sets:", cardSetsData.map(s => s.name));
+        
+        if (!cardSetName) {
+          alert("Vui lòng chọn bộ thẻ trước khi thêm thẻ");
+          return;
+        }
+
+        // First try to find existing card set
+        const selectedCardSetData = cardSetsData.find(set => set.name === cardSetName);
+        if (selectedCardSetData) {
+          console.log("Found existing card set:", selectedCardSetData.name, "with ID:", selectedCardSetData._id);
+          targetCardSetId = selectedCardSetData._id;
+        } else {
+          console.log("Card set not found, creating new one with name:", cardSetName);
+          // If card set doesn't exist, create it first
+          const cardSetResponse = await fetch("http://localhost:5001/api/cards/sets", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              name: cardSetName,
+              description: `Bộ thẻ được tạo từ AddCardModal`,
+              source: "manual"
+            }),
+          });
+
+          if (cardSetResponse.status === 409) {
+            // Card set already exists, get it from response
+            const existingData = await cardSetResponse.json();
+            console.log("Card set already exists, using existing one:", existingData.cardSet.name);
+            targetCardSetId = existingData.cardSet._id;
+            
+            // Refresh card sets list to make sure we have the latest data
+            await fetchCardSets();
+          } else if (!cardSetResponse.ok) {
+            throw new Error("Failed to create card set");
+          } else {
+            const cardSetData = await cardSetResponse.json();
+            targetCardSetId = cardSetData.cardSet._id;
+            console.log("Created new card set with ID:", targetCardSetId);
+            
+            // Refresh card sets list
+            await fetchCardSets();
+          }
+        }
+      }
+
+      const response = await fetch(`http://localhost:5001/api/cards/sets/${targetCardSetId}/cards`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          frontFields: frontFields.filter(f => f.value.trim()),
+          backFields: backFields.filter(f => f.value.trim()),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to save card");
+      }
+
+      const data = await response.json();
+      console.log("Card saved successfully:", data);
+      
+    } catch (error) {
+      console.error("Error saving card:", error);
+      alert("Lỗi khi lưu thẻ: " + error.message);
+    }
+  };
+
+  const saveAllCardsToDatabase = async () => {
+    if (!cardSetId) {
+      // If no cardSetId, we need to find it from selectedCardSet name or currentCardSet or create new one
+      const cardSetName = selectedCardSet || currentCardSet;
+      if (!cardSetName) {
+        alert("Vui lòng chọn bộ thẻ hoặc tạo bộ thẻ mới");
+        return;
+      }
+
+      // Find card set ID by name
+      const selectedCardSetData = cardSetsData.find(set => set.name === cardSetName);
+      if (!selectedCardSetData) {
+        // Card set doesn't exist, create new one
+        await createCardSetAndSaveCards();
+        return;
+      }
+
+      // Use the found card set ID
+      const foundCardSetId = selectedCardSetData._id;
+
+      try {
+        const token = localStorage.getItem("auth_token");
+        
+        if (!token) {
+          alert("Vui lòng đăng nhập trước khi lưu thẻ");
+          return;
+        }
+
+        // Convert addedCards to the format expected by backend
+        const cardsToSave = addedCards.map(cardFields => {
+          const frontFields = cardFields.filter(f => f.label.includes("trước") || f.label.includes("Mặt trước"));
+          const backFields = cardFields.filter(f => f.label.includes("sau") || f.label.includes("Mặt sau"));
+          
+          return {
+            frontFields: frontFields.length ? frontFields : [{ label: "Mặt trước", value: cardFields[0]?.value || "" }],
+            backFields: backFields.length ? backFields : [{ label: "Mặt sau", value: cardFields[1]?.value || "" }],
+          };
+        });
+
+        const response = await fetch(`http://localhost:5001/api/cards/sets/${foundCardSetId}/cards/bulk`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            cards: cardsToSave,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to save cards");
+        }
+
+        const data = await response.json();
+        alert(`Đã lưu thành công ${data.count} thẻ vào bộ thẻ "${selectedCardSet}"!`);
+        setAddedCards([]); // Clear local state
+        onClose();
+        
+      } catch (error) {
+        console.error("Error saving cards:", error);
+        alert("Lỗi khi lưu thẻ: " + error.message);
+      }
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem("auth_token");
+      
+      if (!token) {
+        alert("Vui lòng đăng nhập trước khi lưu thẻ");
+        return;
+      }
+
+      // Convert addedCards to the format expected by backend
+      const cardsToSave = addedCards.map(cardFields => {
+        const frontFields = cardFields.filter(f => f.label.includes("trước") || f.label.includes("Mặt trước"));
+        const backFields = cardFields.filter(f => f.label.includes("sau") || f.label.includes("Mặt sau"));
+        
+        return {
+          frontFields: frontFields.length ? frontFields : [{ label: "Mặt trước", value: cardFields[0]?.value || "" }],
+          backFields: backFields.length ? backFields : [{ label: "Mặt sau", value: cardFields[1]?.value || "" }],
+        };
+      });
+
+      const response = await fetch(`http://localhost:5001/api/cards/sets/${cardSetId}/cards/bulk`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          cards: cardsToSave,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to save cards");
+      }
+
+      const data = await response.json();
+      alert(`Đã lưu thành công ${data.count} thẻ!`);
+      setAddedCards([]); // Clear local state
+      onClose();
+      
+    } catch (error) {
+      console.error("Error saving cards:", error);
+      alert("Lỗi khi lưu thẻ: " + error.message);
+    }
+  };
+
+  const createCardSetAndSaveCards = async () => {
+    try {
+      const token = localStorage.getItem("auth_token");
+      
+      if (!token) {
+        alert("Vui lòng đăng nhập trước khi tạo bộ thẻ");
+        return;
+      }
+
+      const cardSetName = selectedCardSet || currentCardSet || "Bộ thẻ mới";
+      
+      // Create card set first
+      const cardSetResponse = await fetch("http://localhost:5001/api/cards/sets", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: cardSetName,
+          description: `Bộ thẻ được tạo từ AddCardModal`,
+          source: "manual"
+        }),
+      });
+
+      let newCardSetId;
+      
+      if (cardSetResponse.status === 409) {
+        // Card set already exists, get it from response
+        const existingData = await cardSetResponse.json();
+        console.log("Card set already exists, using existing one:", existingData.cardSet.name);
+        newCardSetId = existingData.cardSet._id;
+      } else if (!cardSetResponse.ok) {
+        const errorData = await cardSetResponse.json();
+        throw new Error(errorData.message || "Failed to create card set");
+      } else {
+        const cardSetData = await cardSetResponse.json();
+        newCardSetId = cardSetData.cardSet._id;
+        console.log("Created new card set with ID:", newCardSetId);
+      }
+
+      // Refresh card sets list
+      await fetchCardSets();
+
+      // Now save all cards to the card set
+      if (addedCards.length > 0) {
+        const cardsToSave = addedCards.map(cardFields => {
+          const frontFields = cardFields.filter(f => f.label.includes("trước") || f.label.includes("Mặt trước"));
+          const backFields = cardFields.filter(f => f.label.includes("sau") || f.label.includes("Mặt sau"));
+          
+          return {
+            frontFields: frontFields.length ? frontFields : [{ label: "Mặt trước", value: cardFields[0]?.value || "" }],
+            backFields: backFields.length ? backFields : [{ label: "Mặt sau", value: cardFields[1]?.value || "" }],
+          };
+        });
+
+        const cardsResponse = await fetch(`http://localhost:5001/api/cards/sets/${newCardSetId}/cards/bulk`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            cards: cardsToSave,
+          }),
+        });
+
+        if (!cardsResponse.ok) {
+          throw new Error("Failed to save cards to card set");
+        }
+
+        const cardsData = await cardsResponse.json();
+        alert(`Đã lưu thành công ${cardsData.count} thẻ vào bộ thẻ "${cardSetName}"!`);
+      } else {
+        alert(`Đã sử dụng bộ thẻ "${cardSetName}" thành công!`);
+      }
+      
+      setAddedCards([]); // Clear local state
+      onClose();
+      
+      // Optionally redirect to the card set
+      if (window.location.pathname.includes('/cardset/')) {
+        window.location.href = `/cardset/${newCardSetId}`;
+      }
+      
+    } catch (error) {
+      console.error("Error creating card set and saving cards:", error);
+      alert("Lỗi khi tạo bộ thẻ: " + error.message);
+    }
   };
   
   return (
@@ -120,11 +468,21 @@ export default function AddCardModal({ onClose, currentCardSet }) {
         {/* Hiển thị số thẻ đã thêm */}
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm text-gray-500">Đã thêm <b>{addedCards.length}</b> thẻ</span>
-          {addedCards.length > 0 && (
-            <button className="px-3 py-1 rounded bg-blue-100 text-blue-700 text-xs" onClick={() => { onClose(); setAddedCards([]); }}>
-              Đóng & Xem danh sách thẻ
-            </button>
-          )}
+          <div className="flex gap-2">
+            {addedCards.length > 0 && (
+              <button 
+                className="px-3 py-1 rounded bg-green-100 text-green-700 text-xs hover:bg-green-200" 
+                onClick={cardSetId ? saveAllCardsToDatabase : createCardSetAndSaveCards}
+              >
+                Lưu tất cả thẻ
+              </button>
+            )}
+            {addedCards.length > 0 && (
+              <button className="px-3 py-1 rounded bg-blue-100 text-blue-700 text-xs" onClick={() => { onClose(); setAddedCards([]); }}>
+                Đóng & Xem danh sách thẻ
+              </button>
+            )}
+          </div>
         </div>
               {/* Thanh chức năng phía trên */}
               <div className="flex items-center gap-4 mb-2 flex-wrap">
@@ -217,13 +575,21 @@ export default function AddCardModal({ onClose, currentCardSet }) {
                   </div>
                   <div className="flex flex-col relative" style={{flex: 5.5}}>
                     <label className="text-xs text-gray-500 mb-1">Bộ thẻ</label>
-                    <button
-                      className="px-2 py-1 rounded border text-sm w-full min-w-0 bg-white text-left"
-                      onClick={() => setShowSetModal(true)}
-                    >
-                      {selectedCardSet || "-- Chọn bộ thẻ --"}
-                    </button>
-                    {showSetModal && (
+                    {currentCardSet ? (
+                      // Hiển thị bộ thẻ cố định khi được truyền từ bên ngoài
+                      <div className="px-2 py-1 rounded border text-sm w-full min-w-0 bg-gray-100 text-left">
+                        {currentCardSet} (đã chọn)
+                      </div>
+                    ) : (
+                      // Hiển thị dropdown chọn bộ thẻ bình thường
+                      <button
+                        className="px-2 py-1 rounded border text-sm w-full min-w-0 bg-white text-left"
+                        onClick={() => setShowSetModal(true)}
+                      >
+                        {loadingCardSets ? "Đang tải..." : (selectedCardSet || "-- Chọn bộ thẻ --")}
+                      </button>
+                    )}
+                    {showSetModal && !currentCardSet && (
                       <div className="absolute left-0 top-full mt-2 bg-white rounded-lg shadow-lg border z-50 p-4 flex flex-col" style={{width: '100%'}}>
                         {showAddSetModal ? (
                           <>
@@ -245,15 +611,48 @@ export default function AddCardModal({ onClose, currentCardSet }) {
                                 <button
                                   className="px-6 py-1 rounded bg-blue-500 text-white font-semibold hover:bg-blue-600"
                                   disabled={!newSetName.trim()}
-                                  onClick={() => {
+                                  onClick={async () => {
                                     if (!newSetName.trim()) return;
-                                    // Add to cardSetOptions (dummy, replace with API if needed)
-                                    if (!cardSetOptions.includes(newSetName.trim())) {
-                                      cardSetOptions.unshift(newSetName.trim());
+                                    
+                                    try {
+                                      const token = localStorage.getItem("auth_token");
+                                      
+                                      if (!token) {
+                                        alert("Vui lòng đăng nhập trước khi tạo bộ thẻ");
+                                        return;
+                                      }
+
+                                      // Create the new card set via API
+                                      const response = await fetch("http://localhost:5001/api/cards/sets", {
+                                        method: "POST",
+                                        headers: {
+                                          "Content-Type": "application/json",
+                                          "Authorization": `Bearer ${token}`,
+                                        },
+                                        body: JSON.stringify({
+                                          name: newSetName.trim(),
+                                          description: `Bộ thẻ được tạo từ modal`,
+                                        }),
+                                      });
+
+                                      if (!response.ok) {
+                                        throw new Error("Failed to create card set");
+                                      }
+
+                                      // Refresh the card sets list
+                                      await fetchCardSets();
+                                      
+                                      // Select the newly created card set
+                                      setSelectedCardSet(newSetName.trim());
+                                      setShowAddSetModal(false);
+                                      setNewSetName("");
+                                      
+                                      alert(`Đã tạo bộ thẻ "${newSetName.trim()}" thành công!`);
+                                      
+                                    } catch (error) {
+                                      console.error("Error creating card set:", error);
+                                      alert("Lỗi khi tạo bộ thẻ: " + error.message);
                                     }
-                                    setSelectedCardSet(newSetName.trim());
-                                    setShowAddSetModal(false);
-                                    setNewSetName("");
                                   }}
                                 >OK</button>
                                 <button
@@ -277,15 +676,21 @@ export default function AddCardModal({ onClose, currentCardSet }) {
                               onChange={e => setSetFilter(e.target.value)}
                             />
                             <div className="border rounded bg-gray-50 mb-2 flex-1" style={{maxHeight: '180px', overflowY: 'auto'}}>
-                              {filteredSets.map((set, idx) => (
-                                <div
-                                  key={idx}
-                                  className={`px-3 py-2 cursor-pointer hover:bg-blue-100 ${selectedCardSet === set ? 'bg-blue-200 font-semibold' : ''}`}
-                                  onClick={() => setSelectedCardSet(set)}
-                                >
-                                  {set}
+                              {cardSetOptions.length === 0 ? (
+                                <div className="px-3 py-4 text-center text-gray-500">
+                                  {loadingCardSets ? "Đang tải danh sách bộ thẻ..." : "Chưa có bộ thẻ nào. Hãy tạo bộ thẻ mới."}
                                 </div>
-                              ))}
+                              ) : (
+                                filteredSets.map((set, idx) => (
+                                  <div
+                                    key={idx}
+                                    className={`px-3 py-2 cursor-pointer hover:bg-blue-100 ${selectedCardSet === set ? 'bg-blue-200 font-semibold' : ''}`}
+                                    onClick={() => setSelectedCardSet(set)}
+                                  >
+                                    {set}
+                                  </div>
+                                ))
+                              )}
                             </div>
                             <div className="flex gap-2 justify-end mt-2 w-full">
                               <button className="px-3 py-1 rounded bg-blue-500 text-white font-semibold truncate overflow-hidden" style={{width: 80}} onClick={() => setShowSetModal(false)} title="Chọn">Chọn</button>

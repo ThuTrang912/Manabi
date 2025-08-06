@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import TopBar from '../components/TopBar';
 import Sidebar from '../components/Sidebar';
@@ -7,6 +7,11 @@ import Sidebar from '../components/Sidebar';
 export default function HomePage() {
   const location = useLocation();
   const navigate = useNavigate();
+  
+  // State for card sets from API
+  const [cardSets, setCardSets] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [currentUserId, setCurrentUserId] = useState("");
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -15,7 +20,43 @@ export default function HomePage() {
       localStorage.setItem("auth_token", token);
       navigate("/homepage", { replace: true });
     }
+    
+    // Get current user ID from token
+    const authToken = localStorage.getItem("auth_token");
+    if (authToken) {
+      try {
+        const base64 = authToken.split('.')[1];
+        const jsonStr = decodeURIComponent(escape(atob(base64)));
+        const payload = JSON.parse(jsonStr);
+        setCurrentUserId(payload._id || payload.id || payload.userId || "");
+      } catch (e) {
+        console.error("Error parsing token:", e);
+      }
+    }
+    
+    // Fetch card sets
+    fetchCardSets();
   }, [location, navigate]);
+
+  const fetchCardSets = async () => {
+    try {
+      const token = localStorage.getItem("auth_token");
+      const response = await fetch("http://localhost:5001/api/cards/sets", {
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setCardSets(data.cardSets || []);
+      }
+    } catch (error) {
+      console.error("Error fetching card sets:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // UI state is now managed inside TopBar
 
@@ -44,51 +85,40 @@ export default function HomePage() {
             <iframe src="https://quizlet.com/469507067/match/embed?i=svf2q&x=1jj1" height="500" width="100%" style={{border:0}} title="Quizlet Match Game" />
           </div> */}
           <h2 className="text-lg font-semibold mb-4">Gần đây</h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {/* Card Example */}
-            <div className="bg-white rounded-lg shadow p-4 flex flex-col gap-2">
-              <div className="flex items-center gap-2 text-gray-400 text-sm">
-                <span className="material-icons">drafts</span> Bản nháp
-              </div>
-              <div className="font-semibold text-gray-700 truncate">Học phần chưa đặt tên</div>
-              <div className="text-xs text-gray-500">842 terms · Tác giả: bạn</div>
+          {loading ? (
+            <div className="text-gray-500">Đang tải...</div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+              {cardSets.map((cardSet) => (
+                <div 
+                  key={cardSet._id} 
+                  className="bg-white rounded-lg shadow p-4 flex flex-col gap-2 cursor-pointer hover:shadow-lg transition"
+                  onClick={() => navigate(`/cardset/${cardSet._id}`)}
+                >
+                  <div className="flex items-center gap-2 text-blue-400 text-sm">
+                    <span className="material-icons">menu_book</span> 
+                    {cardSet.source === "manual" ? "Học phần" : "Imported"}
+                  </div>
+                  <div className="font-semibold text-gray-700 truncate" title={cardSet.name}>
+                    {cardSet.name}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {cardSet.stats.totalCards} terms · Tác giả: {cardSet.userId === currentUserId ? "bạn" : "khác"}
+                  </div>
+                  {cardSet.source !== "manual" && (
+                    <div className="text-xs text-gray-400">
+                      Từ {cardSet.source === "quizlet" ? "Quizlet" : cardSet.source === "anki" ? "Anki" : "Import"}
+                    </div>
+                  )}
+                </div>
+              ))}
+              {cardSets.length === 0 && !loading && (
+                <div className="col-span-full text-center text-gray-500 py-8">
+                  Chưa có bộ thẻ nào. Hãy tạo mới hoặc import từ Quizlet/Anki!
+                </div>
+              )}
             </div>
-            <div className="bg-white rounded-lg shadow p-4 flex flex-col gap-2">
-              <div className="flex items-center gap-2 text-blue-400 text-sm">
-                <span className="material-icons">menu_book</span> Học phần
-              </div>
-              <div className="font-semibold text-gray-700 truncate">がぎぐげご</div>
-              <div className="text-xs text-gray-500">42 terms · Tác giả: bạn</div>
-            </div>
-            <div className="bg-white rounded-lg shadow p-4 flex flex-col gap-2">
-              <div className="flex items-center gap-2 text-blue-400 text-sm">
-                <span className="material-icons">menu_book</span> Học phần
-              </div>
-              <div className="font-semibold text-gray-700 truncate">さしすせそ</div>
-              <div className="text-xs text-gray-500">383 terms · Tác giả: bạn</div>
-            </div>
-            <div className="bg-white rounded-lg shadow p-4 flex flex-col gap-2">
-              <div className="flex items-center gap-2 text-blue-400 text-sm">
-                <span className="material-icons">menu_book</span> Học phần
-              </div>
-              <div className="font-semibold text-gray-700 truncate">かきくけこ</div>
-              <div className="text-xs text-gray-500">842 terms · Tác giả: bạn</div>
-            </div>
-            <div className="bg-white rounded-lg shadow p-4 flex flex-col gap-2">
-              <div className="flex items-center gap-2 text-blue-400 text-sm">
-                <span className="material-icons">menu_book</span> Học phần
-              </div>
-              <div className="font-semibold text-gray-700 truncate">あいうえお</div>
-              <div className="text-xs text-gray-500">323 terms · Tác giả: bạn</div>
-            </div>
-            <div className="bg-white rounded-lg shadow p-4 flex flex-col gap-2">
-              <div className="flex items-center gap-2 text-blue-400 text-sm">
-                <span className="material-icons">menu_book</span> Học phần
-              </div>
-              <div className="font-semibold text-gray-700 truncate">かきくけこ</div>
-              <div className="text-xs text-gray-500">522 terms · Tác giả: bạn</div>
-            </div>
-          </div>
+          )}
         </main>
       </div>
     </div>

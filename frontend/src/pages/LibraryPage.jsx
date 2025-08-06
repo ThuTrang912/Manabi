@@ -5,7 +5,13 @@ import {useNavigate } from "react-router-dom";
 
 export default function LibraryPage() {
   const navigate = useNavigate();
-  // Dummy data for demonstration
+  console.log("LibraryPage navigate:", typeof navigate, navigate);
+  
+  // State for card sets from API
+  const [cardSets, setCardSets] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  
+  // Dummy data for demonstration (will be replaced with API data)
   const progressSets = [
     { terms: 15, name: "(Bản nháp) Từ vựng tiếng anh p30(. 3000 từ thông dụng nhất) IELTS" },
     { terms: 842, name: "(Bản nháp) かきくけこ" },
@@ -18,6 +24,7 @@ export default function LibraryPage() {
   const weekSets = [
     { terms: 4, user: "thu_trang912", name: "test học phần" }
   ];
+  
   // Dummy folder data
   const [tab, setTab] = React.useState("set");
   const [folderSearch, setFolderSearch] = React.useState("");
@@ -29,11 +36,37 @@ export default function LibraryPage() {
     { name: "2", count: 14 },
   ];
   const filteredFolders = folders.filter(f => f.name.toLowerCase().includes(folderSearch.toLowerCase()));
-// Dropdown state for sort
+
+  // Dropdown state for sort
   const [showSortDropdown, setShowSortDropdown] = React.useState(false);
   const [sortLabel, setSortLabel] = React.useState("Đã tạo");
   const folderSortOptions = ["Đã đánh dấu", "Đã tạo", "Gần đây", "Đã học"];
   const cardSetSortOptions = ["Đã tạo", "Gần đây", "Đã học"];
+
+  // Fetch card sets from API
+  React.useEffect(() => {
+    fetchCardSets();
+  }, []);
+
+  const fetchCardSets = async () => {
+    try {
+      const token = localStorage.getItem("auth_token");
+      const response = await fetch("http://localhost:5001/api/cards/sets", {
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setCardSets(data.cardSets || []);
+      }
+    } catch (error) {
+      console.error("Error fetching card sets:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Đóng dropdown khi click ngoài
   React.useEffect(() => {
@@ -93,6 +126,73 @@ export default function LibraryPage() {
                 />
                 <span className="material-icons absolute right-2 top-2 text-gray-400">search</span>
               </div>
+            </div>
+            <div className="mb-8">
+              <div className="font-bold text-gray-600 mb-2">BỘ THẺ CỦA BẠN</div>
+              {loading ? (
+                <div className="text-gray-500">Đang tải...</div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {cardSets.map((cardSet) => {
+                    // Debug: log the source value
+                    console.log(`Card set "${cardSet.name}" has source: "${cardSet.source}"`);
+                    
+                    return (
+                      <div 
+                        key={cardSet._id} 
+                        className="bg-white rounded-lg px-4 py-3 shadow border text-base font-semibold cursor-pointer hover:bg-gray-50 transition"
+                        onClick={() => navigate(`/cardset/${cardSet._id}`)}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-gray-500 font-normal">
+                                {cardSet.stats.totalCards} thuật ngữ
+                              </span>
+                              {cardSet.source !== "manual" && (
+                                <span className={`text-xs px-2 py-1 rounded font-normal ${
+                                  cardSet.source === "quizlet" 
+                                    ? "bg-blue-100 text-blue-700" 
+                                    : cardSet.source === "anki"
+                                    ? "bg-green-100 text-green-700"
+                                    : "bg-gray-100 text-gray-700"
+                                }`}>
+                                  {cardSet.source === "quizlet" ? "Quizlet" : 
+                                   cardSet.source === "anki" ? "Anki" : 
+                                   cardSet.source === "import" ? "Import" : 
+                                   cardSet.source.charAt(0).toUpperCase() + cardSet.source.slice(1)}
+                                </span>
+                              )}
+                            </div>
+                            <span className="ml-0">{cardSet.name}</span>
+                            {cardSet.description && (
+                              <div className="text-sm text-gray-500 font-normal mt-1">
+                                {cardSet.description}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button 
+                              className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/cardset/${cardSet._id}/study`);
+                              }}
+                            >
+                              Học
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {cardSets.length === 0 && !loading && (
+                    <div className="text-gray-500 text-center py-8">
+                      Chưa có bộ thẻ nào. Hãy tạo mới hoặc import từ Quizlet/Anki!
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <div className="mb-8">
               <div className="font-bold text-gray-600 mb-2">TIẾN TRÌNH</div>

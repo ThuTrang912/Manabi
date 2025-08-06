@@ -6,6 +6,8 @@ import Sidebar from "./Sidebar";
 import AddCardModal from "./AddCardModal"; 
 
 export default function TopBar({ navigate }) {
+  console.log("TopBar received navigate:", typeof navigate, navigate);
+  
   // Lấy thông tin user từ JWT token trong localStorage
   let avatarUrl = "";
   let userName = "";
@@ -152,7 +154,7 @@ export default function TopBar({ navigate }) {
     setBackFields(backFields.map(f => ({ ...f, value: "" })));
   };
   return (
-    <header className="flex items-center px-6 py-4 bg-white shadow-sm relative">
+    <header className="flex items-center px-6 py-4 bg-white shadow-sm relative" style={{zIndex: 100}}>
       {/* Hamburger menu button */}
       <button className="mr-2 text-2xl text-blue-500 focus:outline-none flex items-center justify-center" onClick={() => window.openSidebar && window.openSidebar()}>
         <Bars3Icon className="w-8 h-8 text-blue-500" />
@@ -160,7 +162,10 @@ export default function TopBar({ navigate }) {
       {/* Sidebar component, state managed internally */}
       <Sidebar navigate={navigate} />
       {/* Logo button */}
-      <button className="mr-2 focus:outline-none flex items-center justify-center" onClick={() => navigate("/")}> 
+      <button className="mr-2 focus:outline-none flex items-center justify-center" onClick={() => {
+        console.log("Logo clicked, navigating to /");
+        navigate("/");
+      }}> 
         <img src={manabiLogo} alt="Manabi Logo" style={{width: '100px', height: '60px', objectFit: 'contain'}} />
       </button>
       <div className="flex-1">
@@ -171,7 +176,10 @@ export default function TopBar({ navigate }) {
         />
       </div>
       <div className="ml-4 relative">
-        <button className="px-4 py-2 bg-blue-400 text-white rounded-full font-semibold hover:bg-blue-500 transition" onClick={() => setShowAdd(v => !v)}>
+        <button className="px-4 py-2 bg-blue-400 text-white rounded-full font-semibold hover:bg-blue-500 transition" onClick={() => {
+          console.log("Tạo mới clicked, current showAdd:", showAdd);
+          setShowAdd(v => !v);
+        }}>
           + Tạo mới
         </button>
         {showAdd && (
