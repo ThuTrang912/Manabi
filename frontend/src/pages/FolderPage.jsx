@@ -10,7 +10,40 @@ export default function FolderPage() {
   const { folderId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const folderName = location.state?.folderName || folderId;
+  
+  // Folder state
+  const [folder, setFolder] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+  const folderName = folder?.name || "Đang tải...";
+
+  // Fetch folder details from API
+  React.useEffect(() => {
+    const fetchFolder = async () => {
+      try {
+        const token = localStorage.getItem("auth_token");
+        const response = await fetch(`http://localhost:5001/api/folders/${folderId}`, {
+          headers: {
+            "Authorization": `Bearer ${token}`,
+          },
+        });
+
+        if (response.ok) {
+          const folderData = await response.json();
+          setFolder(folderData);
+        } else {
+          console.error("Failed to fetch folder:", response.status);
+        }
+      } catch (error) {
+        console.error("Error fetching folder:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (folderId) {
+      fetchFolder();
+    }
+  }, [folderId]);
 
   // Dummy user info (replace with real logic if needed)
   const avatarUrl = "https://ui-avatars.com/api/?name=User&background=cccccc&color=555555&size=96";
@@ -58,8 +91,12 @@ export default function FolderPage() {
       <div className="flex flex-1">
         <Sidebar showSidebar={showSidebar} setShowSidebar={setShowSidebar} navigate={navigate} />
         <main className="flex-1 flex flex-col items-center pt-12">
-          <div className="flex items-center justify-between w-full max-w-2xl mb-8">
-            <h1 className="text-3xl font-bold">{folderName}</h1>
+          {loading ? (
+            <div className="text-gray-500">Đang tải thông tin thư mục...</div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between w-full max-w-2xl mb-8">
+                <h1 className="text-3xl font-bold">{folderName}</h1>
             <div className="flex gap-2 items-center">
               {/* Selected tag button */}
               <button className="px-4 py-1 rounded-full bg-gray-200 text-white font-semibold  border-none" style={{ minWidth: 80 }}>{selectedTag || "Học"}</button>
@@ -159,6 +196,8 @@ export default function FolderPage() {
               <button className="px-8 py-3 rounded-full bg-blue-500 text-white font-semibold text-lg hover:bg-blue-600 transition" onClick={() => setshowAddSubfolderModal(true)}>Thêm tài liệu học</button>
             </div>
           </div>
+            </>
+          )}
         </main>
           {/* Modal thêm tài liệu học */}
           {showAddSubfolderModal && (
@@ -166,7 +205,7 @@ export default function FolderPage() {
               <div className="bg-white rounded-xl shadow-lg p-8 w-[480px] max-w-[95vw] flex flex-col relative" style={{maxHeight: '90vh', overflowY: 'auto'}}>
                 {/* Close button */}
                 <button className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl font-bold" onClick={() => setshowAddSubfolderModal(false)} aria-label="Đóng" style={{background: 'none', border: 'none', cursor: 'pointer'}}>×</button>
-                <h2 className="text-2xl font-bold mb-4">Thêm vào test 4</h2>
+                <h2 className="text-2xl font-bold mb-4">Thêm vào {folderName}</h2>
                 {/* Tabs */}
                 <div className="flex gap-2 mb-4">
                   <button

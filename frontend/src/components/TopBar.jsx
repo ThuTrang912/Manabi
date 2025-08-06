@@ -5,7 +5,7 @@ import UserMenu from './UserMenu';
 import Sidebar from "./Sidebar";
 import AddCardModal from "./AddCardModal"; 
 
-export default function TopBar({ navigate }) {
+export default function TopBar({ navigate, onFolderCreated }) {
   console.log("TopBar received navigate:", typeof navigate, navigate);
   
   // Lấy thông tin user từ JWT token trong localStorage
@@ -227,17 +227,25 @@ export default function TopBar({ navigate }) {
                     }
                     // Gọi API tạo folder
                     try {
+                      const token = localStorage.getItem("auth_token");
                       const res = await fetch("http://localhost:5001/api/folders", {
                         method: "POST",
                         headers: {
-                          "Content-Type": "application/json"
+                          "Content-Type": "application/json",
+                          "Authorization": `Bearer ${token}`
                         },
-                        body: JSON.stringify({ name: folderName, userId })
+                        body: JSON.stringify({ name: folderName })
                       });
                       if (!res.ok) throw new Error("Tạo thư mục thất bại");
                       const folder = await res.json();
                       setshowAddFolderModal(false);
                       setFolderName("");
+                      
+                      // Refresh folder list if callback provided
+                      if (onFolderCreated) {
+                        onFolderCreated();
+                      }
+                      
                       // Chuyển hướng với path user/userid/folder/folderid
                       navigate(`/user/${userName}/folder/${folder._id}`, { state: { folderName: folder.name } });
                     } catch (err) {

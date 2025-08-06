@@ -6,6 +6,7 @@ import LoginPage from "./pages/LoginPage.jsx";
 import HomePage from "./pages/HomePage.jsx";
 import SignupPage from "./pages/SignupPage.jsx";
 import FolderPage from "./pages/FolderPage.jsx";
+import FoldersPage from "./pages/FoldersPage.jsx";
 import AddCardSetPage from "./pages/AddCardSetPage.jsx";
 import LibraryPage from "./pages/LibraryPage";
 import CardStudyPage from "./pages/CardStudyPage.jsx";
@@ -42,6 +43,16 @@ function App() {
         <Route path="/sets" element={
           <PrivateRoute>
             <LibraryPage />
+          </PrivateRoute>
+        } />
+        <Route path="/library" element={
+          <PrivateRoute>
+            <LibraryPage />
+          </PrivateRoute>
+        } />
+        <Route path="/library/folders" element={
+          <PrivateRoute>
+            <FoldersPage />
           </PrivateRoute>
         } />
         <Route path="/add-cardset" element={

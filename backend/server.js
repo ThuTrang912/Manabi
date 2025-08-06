@@ -1,7 +1,7 @@
 // const express = require("express");
 import express from "express";
 import itemsRoutes from "./src/routes/itemsRoutes.js";
-import foldersRoutes from "./src/routes/foldersRoutes.js";
+import foldersRoutes from "./src/routes/folderRoutes.js";
 import authRoutes from "./src/routes/authRoutes.js";
 import googleRoutes from "./src/routes/googleRoutes.js";
 import facebookRoutes from "./src/routes/facebookRoutes.js";

@@ -5,10 +5,18 @@ const FolderSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  description: {
+    type: String,
+    default: "",
+  },
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
     required: true,
+  },
+  cardSetCount: {
+    type: Number,
+    default: 0,
   },
   createdAt: {
     type: Date,
