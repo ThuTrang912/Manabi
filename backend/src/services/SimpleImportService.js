@@ -49,38 +49,81 @@ class SimpleImportService {
       );
 
       const cards = [];
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim();
+      let currentEntry = null;
+      let i = 0;
+
+      for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+        const line = lines[lineIndex].trim();
         if (!line) continue;
 
-        // CSV format: "Front,Back" or "Front;Back" or "Front\tBack"
-        let parts;
-        if (line.includes("\t")) {
-          parts = line.split("\t");
-        } else if (line.includes(";")) {
-          parts = line.split(";");
-        } else if (line.includes(",")) {
-          parts = line.split(",");
-        } else {
-          continue; // Skip lines that don't have separators
-        }
+        // Check if this line starts a new entry (contains Japanese characters and comma)
+        if (
+          line.match(/^[ひらがなカタカナ一-龯ー]+,.*/) ||
+          line.match(/^[a-zA-Z]+,.*/) ||
+          line.match(/^.*,.*$/)
+        ) {
+          // Save previous entry if exists
+          if (currentEntry && currentEntry.front && currentEntry.back) {
+            // Combine back with extra lines
+            const finalBack =
+              currentEntry.extraLines.length > 0
+                ? [currentEntry.back, ...currentEntry.extraLines].join("\n")
+                : currentEntry.back;
 
-        if (parts.length < 2) continue;
+            const card = new Card({
+              cardSetId: cardSet._id,
+              position: i++,
+              content: {
+                front: {
+                  text: currentEntry.front.trim(),
+                },
+                back: {
+                  text: finalBack.trim(),
+                },
+              },
+              source: sourceType,
+            });
+            cards.push(card);
+          }
+
+          // Start new entry
+          const parts = line.split(",");
+          if (parts.length >= 2) {
+            currentEntry = {
+              front: parts[0].trim(),
+              back: parts[1].trim(),
+              extraLines: [],
+            };
+          }
+        } else {
+          // This is a continuation line (Vietnamese meaning, example, etc.)
+          if (currentEntry) {
+            currentEntry.extraLines.push(line);
+          }
+        }
+      }
+
+      // Don't forget the last entry
+      if (currentEntry && currentEntry.front && currentEntry.back) {
+        // Combine back with extra lines
+        const finalBack =
+          currentEntry.extraLines.length > 0
+            ? [currentEntry.back, ...currentEntry.extraLines].join("\n")
+            : currentEntry.back;
 
         const card = new Card({
           cardSetId: cardSet._id,
-          position: i,
+          position: i++,
           content: {
             front: {
-              text: parts[0].trim().replace(/^["']|["']$/g, ""), // Remove quotes
+              text: currentEntry.front.trim(),
             },
             back: {
-              text: parts[1].trim().replace(/^["']|["']$/g, ""), // Remove quotes
+              text: finalBack.trim(),
             },
           },
-          source: "import",
+          source: sourceType,
         });
-
         cards.push(card);
       }
 
@@ -94,8 +137,17 @@ class SimpleImportService {
       cardSet.stats.totalCards = cards.length;
       await cardSet.save();
 
+      // Return optimized response to avoid payload too large error
       return {
-        cardSet,
+        cardSet: {
+          _id: cardSet._id,
+          name: cardSet.name,
+          description: cardSet.description,
+          stats: { totalCards: cards.length },
+          source: cardSet.source,
+          createdAt: cardSet.createdAt,
+          updatedAt: cardSet.updatedAt,
+        },
         cardsCount: cards.length,
         success: true,
       };
@@ -201,8 +253,17 @@ class SimpleImportService {
       cardSet.stats.totalCards = cards.length;
       await cardSet.save();
 
+      // Return optimized response to avoid payload too large error
       return {
-        cardSet,
+        cardSet: {
+          _id: cardSet._id,
+          name: cardSet.name,
+          description: cardSet.description,
+          stats: { totalCards: cards.length },
+          source: cardSet.source,
+          createdAt: cardSet.createdAt,
+          updatedAt: cardSet.updatedAt,
+        },
         cardsCount: cards.length,
         success: true,
       };

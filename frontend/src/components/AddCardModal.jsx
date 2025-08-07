@@ -109,6 +109,16 @@ export default function AddCardModal({ onClose, currentCardSet, cardSetId }) {
   }, [selectedCardSet]);
   const [frontFields, setFrontFields] = React.useState([{ id: 1, label: "Mặt trước", value: "" }]);
   const [backFields, setBackFields] = React.useState([{ id: 2, label: "Mặt sau", value: "" }]);
+  
+  // States for image and audio functionality
+  const [showImageModal, setShowImageModal] = React.useState(false);
+  const [showAudioModal, setShowAudioModal] = React.useState(false);
+  const [selectedFile, setSelectedFile] = React.useState(null);
+  const [isRecording, setIsRecording] = React.useState(false);
+  const [mediaRecorder, setMediaRecorder] = React.useState(null);
+  const [audioBlob, setAudioBlob] = React.useState(null);
+  const [currentFieldForMedia, setCurrentFieldForMedia] = React.useState(null); // Track which field to add media to
+  
   // Modal chỉnh sửa trường tin
   const [showFieldEditor, setShowFieldEditor] = React.useState(false);
   // Danh sách trường tin động (gộp front/back cho modal chỉnh sửa)
@@ -141,6 +151,93 @@ export default function AddCardModal({ onClose, currentCardSet, cardSetId }) {
   const updateBackField = (id, value) => {
     setBackFields(backFields.map(f => f.id === id ? { ...f, value } : f));
   };
+  
+  // Image handling functions
+  const handleImageUpload = () => {
+    setShowImageModal(true);
+  };
+  
+  const handleImageFileSelect = (event) => {
+    const file = event.target.files[0];
+    if (file && file.type.startsWith('image/')) {
+      setSelectedFile(file);
+      // Convert to base64 for preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const imageUrl = e.target.result;
+        if (currentFieldForMedia) {
+          // Add image to current field
+          const { type, id } = currentFieldForMedia;
+          if (type === 'front') {
+            updateFrontField(id, frontFields.find(f => f.id === id).value + `<img src="${imageUrl}" alt="Uploaded image" style="max-width: 200px; height: auto;" />`);
+          } else {
+            updateBackField(id, backFields.find(f => f.id === id).value + `<img src="${imageUrl}" alt="Uploaded image" style="max-width: 200px; height: auto;" />`);
+          }
+        }
+        setShowImageModal(false);
+        setSelectedFile(null);
+        setCurrentFieldForMedia(null);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+  
+  // Audio recording functions
+  const handleAudioRecording = async () => {
+    setShowAudioModal(true);
+  };
+  
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks = [];
+      
+      recorder.ondataavailable = (e) => {
+        chunks.push(e.data);
+      };
+      
+      recorder.onstop = () => {
+        const audioBlob = new Blob(chunks, { type: 'audio/wav' });
+        setAudioBlob(audioBlob);
+        
+        // Convert to base64 and add to field
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const audioUrl = e.target.result;
+          if (currentFieldForMedia) {
+            const { type, id } = currentFieldForMedia;
+            if (type === 'front') {
+              updateFrontField(id, frontFields.find(f => f.id === id).value + `<audio controls><source src="${audioUrl}" type="audio/wav">Your browser does not support audio.</audio>`);
+            } else {
+              updateBackField(id, backFields.find(f => f.id === id).value + `<audio controls><source src="${audioUrl}" type="audio/wav">Your browser does not support audio.</audio>`);
+            }
+          }
+          setShowAudioModal(false);
+          setAudioBlob(null);
+          setCurrentFieldForMedia(null);
+        };
+        reader.readAsDataURL(audioBlob);
+      };
+      
+      setMediaRecorder(recorder);
+      recorder.start();
+      setIsRecording(true);
+    } catch (error) {
+      console.error('Error accessing microphone:', error);
+      alert('Không thể truy cập microphone. Vui lòng kiểm tra quyền truy cập.');
+    }
+  };
+  
+  const stopRecording = () => {
+    if (mediaRecorder && isRecording) {
+      mediaRecorder.stop();
+      mediaRecorder.stream.getTracks().forEach(track => track.stop());
+      setIsRecording(false);
+      setMediaRecorder(null);
+    }
+  };
+  
   const handleAddCard = () => {
     // Add to local state only - user will save all at once
     setAddedCards([
@@ -853,8 +950,8 @@ export default function AddCardModal({ onClose, currentCardSet, cardSetId }) {
                 <button className="px-2 py-1 rounded bg-gray-100 text-gray-700" title="Cỡ chữ nhỏ">x<sub>2</sub></button>
                 <button className="px-2 py-1 rounded bg-gray-100 text-gray-700" title="Cỡ chữ lớn">A</button>
                 <button className="px-2 py-1 rounded bg-gray-100 text-gray-700" title="Màu sắc"><span className="material-icons">format_color_fill</span></button> */}
-                <button className="px-2 py-1 rounded bg-gray-100 text-gray-700" title="Chèn hình"><span className="material-icons">image</span></button>
-                <button className="px-2 py-1 rounded bg-gray-100 text-gray-700" title="Chèn âm thanh"><span className="material-icons">mic</span></button>
+                <button className="px-2 py-1 rounded bg-gray-100 text-gray-700" title="Chèn hình" onClick={handleImageUpload}><span className="material-icons">image</span></button>
+                <button className="px-2 py-1 rounded bg-gray-100 text-gray-700" title="Chèn âm thanh" onClick={handleAudioRecording}><span className="material-icons">mic</span></button>
                 <button className="px-2 py-1 rounded bg-gray-100 text-gray-700" title="Chèn file"><span className="material-icons">attach_file</span></button>
                 {/* <button className="px-2 py-1 rounded bg-gray-100 text-gray-700" title="Chèn công thức"><span className="material-icons">functions</span></button> */}
               </div>

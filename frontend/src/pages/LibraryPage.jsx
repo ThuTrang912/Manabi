@@ -13,20 +13,6 @@ export default function LibraryPage() {
   const [loading, setLoading] = React.useState(true);
   const [foldersLoading, setFoldersLoading] = React.useState(true);
   
-  // Dummy data for demonstration (will be replaced with API data)
-  const progressSets = [
-    { terms: 15, name: "(Bản nháp) Từ vựng tiếng anh p30(. 3000 từ thông dụng nhất) IELTS" },
-    { terms: 842, name: "(Bản nháp) かきくけこ" },
-    { terms: 323, name: "(Bản nháp) あいうえお" },
-    { terms: 112, name: "(Bản nháp) だでど" },
-    { terms: 349, name: "(Bản nháp) かきくけこ" },
-    { terms: 441, name: "(Bản nháp) あいうえお" },
-    { terms: 187, name: "(Bản nháp) かきくけこ" },
-  ];
-  const weekSets = [
-    { terms: 4, user: "thu_trang912", name: "test học phần" }
-  ];
-  
   // Tab and search state
   const [tab, setTab] = React.useState("set");
   const [search, setSearch] = React.useState("");
@@ -35,13 +21,60 @@ export default function LibraryPage() {
   const folderSortOptions = ["Đã đánh dấu", "Đã tạo", "Gần đây", "Đã học"];
   const cardSetSortOptions = ["Đã tạo", "Gần đây", "Đã học"];
   
+  // Sorting functions
+  const sortCardSets = (cardSets, sortType) => {
+    const sorted = [...cardSets].sort((a, b) => {
+      switch (sortType) {
+        case "Đã tạo":
+          return new Date(b.createdAt || b.metadata?.createdAt) - new Date(a.createdAt || a.metadata?.createdAt);
+        case "Gần đây":
+          return new Date(b.updatedAt || b.metadata?.updatedAt || b.createdAt) - new Date(a.updatedAt || a.metadata?.updatedAt || a.createdAt);
+        case "Đã học":
+          return (b.metadata?.lastStudied ? new Date(b.metadata.lastStudied) : new Date(0)) - 
+                 (a.metadata?.lastStudied ? new Date(a.metadata.lastStudied) : new Date(0));
+        default:
+          return 0;
+      }
+    });
+    return sorted;
+  };
+
+  const sortFolders = (folders, sortType) => {
+    const sorted = [...folders].sort((a, b) => {
+      switch (sortType) {
+        case "Đã đánh dấu":
+          return (b.isBookmarked ? 1 : 0) - (a.isBookmarked ? 1 : 0);
+        case "Đã tạo":
+          return new Date(b.createdAt) - new Date(a.createdAt);
+        case "Gần đây":
+          return new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt);
+        case "Đã học":
+          return (b.lastStudied ? new Date(b.lastStudied) : new Date(0)) - 
+                 (a.lastStudied ? new Date(a.lastStudied) : new Date(0));
+        default:
+          return 0;
+      }
+    });
+    return sorted;
+  };
+  
   const filteredFolders = folders.filter(f => f.name.toLowerCase().includes(search.toLowerCase()));
+  const filteredCardSets = cardSets.filter(cs => cs.name.toLowerCase().includes(search.toLowerCase()));
+  
+  // Apply sorting
+  const sortedCardSets = sortCardSets(filteredCardSets, sortLabel);
+  const sortedFolders = sortFolders(filteredFolders, sortLabel);
 
   // Fetch card sets and folders from API
   React.useEffect(() => {
     fetchCardSets();
     fetchFolders();
   }, []);
+
+  // Reset sort label when switching tabs
+  React.useEffect(() => {
+    setSortLabel("Đã tạo");
+  }, [tab]);
 
   const fetchCardSets = async () => {
     try {
@@ -122,7 +155,7 @@ export default function LibraryPage() {
                 </button>
                 {showSortDropdown && (
                   <div className="absolute left-0 mt-2 w-40 bg-white rounded shadow border z-10">
-                    {cardSetSortOptions.map(option => (
+                    {(tab === "set" ? cardSetSortOptions : folderSortOptions).map(option => (
                       <div
                         key={option}
                         className={`px-4 py-2 cursor-pointer hover:bg-gray-100 ${sortLabel === option ? 'font-bold text-blue-600' : ''}`}
@@ -151,10 +184,7 @@ export default function LibraryPage() {
                 <div className="text-gray-500">Đang tải...</div>
               ) : (
                 <div className="flex flex-col gap-2">
-                  {cardSets.map((cardSet) => {
-                    // Debug: log the source value
-                    console.log(`Card set "${cardSet.name}" has source: "${cardSet.source}"`);
-                    
+                  {sortedCardSets.map((cardSet) => {
                     return (
                       <div 
                         key={cardSet._id} 
@@ -181,6 +211,14 @@ export default function LibraryPage() {
                                    cardSet.source.charAt(0).toUpperCase() + cardSet.source.slice(1)}
                                 </span>
                               )}
+                              {(sortLabel === "Đã tạo" || sortLabel === "Gần đây") && (
+                                <span className="text-xs text-gray-400 font-normal">
+                                  {sortLabel === "Đã tạo" 
+                                    ? new Date(cardSet.createdAt || cardSet.metadata?.createdAt).toLocaleDateString('vi-VN')
+                                    : new Date(cardSet.updatedAt || cardSet.metadata?.updatedAt || cardSet.createdAt).toLocaleDateString('vi-VN')
+                                  }
+                                </span>
+                              )}
                             </div>
                             <span className="ml-0">{cardSet.name}</span>
                             {cardSet.description && (
@@ -204,47 +242,13 @@ export default function LibraryPage() {
                       </div>
                     );
                   })}
-                  {cardSets.length === 0 && !loading && (
+                  {sortedCardSets.length === 0 && !loading && (
                     <div className="text-gray-500 text-center py-8">
-                      Chưa có bộ thẻ nào. Hãy tạo mới hoặc import từ Quizlet/Anki!
+                      {search ? "Không tìm thấy bộ thẻ nào" : "Chưa có bộ thẻ nào. Hãy tạo mới hoặc import từ Quizlet/Anki!"}
                     </div>
                   )}
                 </div>
               )}
-            </div>
-            <div className="mb-8">
-              <div className="font-bold text-gray-600 mb-2">TIẾN TRÌNH</div>
-              <div className="flex flex-col gap-2">
-                {progressSets.map((set, idx) => (
-                  <div 
-                    key={idx} 
-                    className="bg-white rounded-lg px-4 py-3 shadow border text-base font-semibold cursor-pointer hover:bg-gray-50 transition"
-                    onClick={() => navigate(`/cardset/${set.id || idx}/study`)}
-                  >
-                    <span className="text-xs text-gray-500 font-normal">{set.terms} thuật ngữ</span> <span className="ml-2">{set.name}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="mb-8">
-              <div className="font-bold text-gray-600 mb-2">TUẦN NÀY</div>
-              <div className="flex flex-col gap-2">
-                {weekSets.map((set, idx) => (
-                  <div 
-                    key={idx} 
-                    className="bg-white rounded-lg px-4 py-3 shadow border text-base font-semibold flex items-center gap-2 cursor-pointer hover:bg-gray-50 transition"
-                    onClick={() => navigate(`/cardset/${set.id || idx}/study`)}
-                  >
-                    <span className="text-xs text-gray-500 font-normal">{set.terms} thuật ngữ</span>
-                    <span className="text-xs text-gray-400 font-normal">by {set.user}</span>
-                    <span className="ml-2">{set.name}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div>
-              <div className="font-bold text-gray-600 mb-2">THÁNG 7 NĂM 2025</div>
-              {/* Thêm dữ liệu tháng nếu cần */}
             </div>
           </>
         ) : (
@@ -285,8 +289,8 @@ export default function LibraryPage() {
               <div className="text-gray-500">Đang tải thư mục...</div>
             ) : (
               <div className="flex flex-col gap-4">
-                {filteredFolders.length > 0 ? (
-                  filteredFolders.map((folder) => (
+                {sortedFolders.length > 0 ? (
+                  sortedFolders.map((folder) => (
                     <div 
                       key={folder._id} 
                       className="bg-white rounded-lg px-6 py-4 shadow border flex items-center gap-4 cursor-pointer hover:bg-gray-50 transition"
@@ -294,10 +298,25 @@ export default function LibraryPage() {
                     >
                       <div className="text-sm text-gray-500 w-16">{folder.cardSetCount || 0} mục</div>
                       <span className="material-icons text-2xl text-gray-400">folder</span>
-                      <span className="font-bold text-lg text-gray-800">{folder.name}</span>
-                      {folder.description && (
-                        <span className="text-sm text-gray-500 ml-2">{folder.description}</span>
-                      )}
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-lg text-gray-800">{folder.name}</span>
+                          {folder.isBookmarked && (
+                            <span className="material-icons text-yellow-500 text-sm">star</span>
+                          )}
+                          {(sortLabel === "Đã tạo" || sortLabel === "Gần đây") && (
+                            <span className="text-xs text-gray-400 font-normal">
+                              {sortLabel === "Đã tạo" 
+                                ? new Date(folder.createdAt).toLocaleDateString('vi-VN')
+                                : new Date(folder.updatedAt || folder.createdAt).toLocaleDateString('vi-VN')
+                              }
+                            </span>
+                          )}
+                        </div>
+                        {folder.description && (
+                          <div className="text-sm text-gray-500 mt-1">{folder.description}</div>
+                        )}
+                      </div>
                     </div>
                   ))
                 ) : (
