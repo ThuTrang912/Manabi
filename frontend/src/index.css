@@ -1,3 +1,30 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Global styles for images in card content */
+.card-content img,
+.field-content img,
+.content-html img {
+  max-width: 200px !important;
+  height: auto !important;
+  border-radius: 8px !important;
+  margin: 8px 0 !important;
+  display: block !important;
+  border: 2px solid #e5e7eb !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Audio elements */
+.card-content audio,
+.field-content audio,
+.content-html audio {
+  margin: 8px 0 !important;
+  display: block !important;
+  max-width: 300px !important;
+}
+
+/* Force image display in all contexts */
+img {
+  display: block !important;
+}

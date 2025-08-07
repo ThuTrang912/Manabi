@@ -343,12 +343,15 @@ export default function CardSetPage() {
                   className="w-80 h-48 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow-lg border cursor-pointer flex items-center justify-center text-center p-6 transition-all hover:scale-105 hover:shadow-xl"
                   onClick={toggleAnswer}
                 >
-                  <div>
-                    <div className="text-xl font-bold mb-3">
-                      {showAnswer 
-                        ? allCards[currentCard]?.content.back.text 
-                        : allCards[currentCard]?.content.front.text
-                      }
+                  <div className="w-full">
+                    <div className="text-xl font-bold mb-3 card-content">
+                      <div
+                        dangerouslySetInnerHTML={{
+                          __html: showAnswer 
+                            ? allCards[currentCard]?.content.back.text || ''
+                            : allCards[currentCard]?.content.front.text || ''
+                        }}
+                      />
                     </div>
                     <div className="text-xs text-gray-500">
                       {showAnswer ? "Mặt sau" : "Mặt trước"} - Click để lật thẻ
@@ -436,16 +439,13 @@ export default function CardSetPage() {
                     {/* Front (Term) */}
                     <div className="mb-3">
                       <div className="text-sm text-gray-500 mb-1">Từ</div>
-                      <div className="font-medium text-base">
-                        {card.content.front.text}
-                      </div>
-                      {card.content.front.image && (
-                        <img 
-                          src={card.content.front.image} 
-                          alt="Front" 
-                          className="mt-2 max-w-24 max-h-24 object-cover rounded"
+                      <div className="font-medium text-base card-content">
+                        <div
+                          dangerouslySetInnerHTML={{
+                            __html: card.content.front.text || ''
+                          }}
                         />
-                      )}
+                      </div>
                     </div>
                     
                     {/* Divider line */}
@@ -454,16 +454,13 @@ export default function CardSetPage() {
                     {/* Back (Definition) */}
                     <div>
                       <div className="text-sm text-gray-500 mb-1">Nghĩa</div>
-                      <div className="text-gray-700">
-                        {card.content.back.text}
-                      </div>
-                      {card.content.back.image && (
-                        <img 
-                          src={card.content.back.image} 
-                          alt="Back" 
-                          className="mt-2 max-w-24 max-h-24 object-cover rounded"
+                      <div className="text-gray-700 card-content">
+                        <div
+                          dangerouslySetInnerHTML={{
+                            __html: card.content.back.text || ''
+                          }}
                         />
-                      )}
+                      </div>
                     </div>
                   </div>
                   

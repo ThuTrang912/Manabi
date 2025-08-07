@@ -166,12 +166,18 @@ export default function AddCardModal({ onClose, currentCardSet, cardSetId }) {
       reader.onload = (e) => {
         const imageUrl = e.target.result;
         if (currentFieldForMedia) {
-          // Add image to current field
+          // Add image to current field with proper styling
           const { type, id } = currentFieldForMedia;
+          const imageHtml = `<img src="${imageUrl}" alt="Uploaded image" style="max-width: 200px; height: auto; border-radius: 8px; margin: 8px 0; display: block; border: 2px solid #e5e7eb; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);" />`;
+          
           if (type === 'front') {
-            updateFrontField(id, frontFields.find(f => f.id === id).value + `<img src="${imageUrl}" alt="Uploaded image" style="max-width: 200px; height: auto;" />`);
+            const currentField = frontFields.find(f => f.id === id);
+            const textContent = currentField.value.replace(/<img[^>]*>|<audio[^>]*>.*?<\/audio>/g, '');
+            updateFrontField(id, textContent + imageHtml);
           } else {
-            updateBackField(id, backFields.find(f => f.id === id).value + `<img src="${imageUrl}" alt="Uploaded image" style="max-width: 200px; height: auto;" />`);
+            const currentField = backFields.find(f => f.id === id);
+            const textContent = currentField.value.replace(/<img[^>]*>|<audio[^>]*>.*?<\/audio>/g, '');
+            updateBackField(id, textContent + imageHtml);
           }
         }
         setShowImageModal(false);
@@ -207,10 +213,16 @@ export default function AddCardModal({ onClose, currentCardSet, cardSetId }) {
           const audioUrl = e.target.result;
           if (currentFieldForMedia) {
             const { type, id } = currentFieldForMedia;
+            const audioHtml = `<audio controls style="margin: 8px 0; display: block; max-width: 300px;"><source src="${audioUrl}" type="audio/wav">Your browser does not support audio.</audio>`;
+            
             if (type === 'front') {
-              updateFrontField(id, frontFields.find(f => f.id === id).value + `<audio controls><source src="${audioUrl}" type="audio/wav">Your browser does not support audio.</audio>`);
+              const currentField = frontFields.find(f => f.id === id);
+              const textContent = currentField.value.replace(/<img[^>]*>|<audio[^>]*>.*?<\/audio>/g, '');
+              updateFrontField(id, textContent + audioHtml);
             } else {
-              updateBackField(id, backFields.find(f => f.id === id).value + `<audio controls><source src="${audioUrl}" type="audio/wav">Your browser does not support audio.</audio>`);
+              const currentField = backFields.find(f => f.id === id);
+              const textContent = currentField.value.replace(/<img[^>]*>|<audio[^>]*>.*?<\/audio>/g, '');
+              updateBackField(id, textContent + audioHtml);
             }
           }
           setShowAudioModal(false);
@@ -962,12 +974,36 @@ export default function AddCardModal({ onClose, currentCardSet, cardSetId }) {
                   <div className="font-semibold text-gray-700 mb-1">Mặt trước</div>
                   {frontFields.map((field, idx) => (
                     <div key={field.id} className="flex items-center gap-2 mb-2">
-                      <input
-                        className="w-full px-4 py-2 rounded border text-lg"
-                        placeholder={field.label}
-                        value={field.value}
-                        onChange={e => updateFrontField(field.id, e.target.value)}
-                      />
+                      <div className="w-full">
+                        {/* Input field for text */}
+                        <input
+                          className="w-full px-4 py-2 rounded border text-lg"
+                          placeholder={field.label}
+                          value={field.value.replace(/<img[^>]*>|<audio[^>]*>.*?<\/audio>/g, '')} // Remove media HTML for input display
+                          onChange={e => {
+                            // Preserve existing media content when updating text
+                            const mediaMatch = field.value.match(/(<img[^>]*>|<audio[^>]*>.*?<\/audio>)/g);
+                            const mediaContent = mediaMatch ? mediaMatch.join('') : '';
+                            updateFrontField(field.id, e.target.value + mediaContent);
+                          }}
+                        />
+                        {/* Preview area for media content */}
+                        {(field.value.includes('<img') || field.value.includes('<audio')) && (
+                          <div className="mt-2 p-2 border border-gray-200 rounded bg-gray-50 min-h-[50px] relative">
+                            <div dangerouslySetInnerHTML={{ __html: field.value.match(/(<img[^>]*>|<audio[^>]*>.*?<\/audio>)/g)?.join('') || '' }} />
+                            <button 
+                              className="absolute top-1 right-1 px-2 py-1 bg-red-100 text-red-600 rounded text-xs hover:bg-red-200"
+                              onClick={() => {
+                                const textContent = field.value.replace(/<img[^>]*>|<audio[^>]*>.*?<\/audio>/g, '');
+                                updateFrontField(field.id, textContent);
+                              }}
+                              title="Xóa media"
+                            >
+                              <span className="material-icons text-xs">delete</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
                       {idx > 0 && (
                         <button className="px-2 py-1 rounded bg-red-100 text-red-600 text-xs" title="Xóa trường" onClick={() => removeFrontField(field.id)}>
                           <span className="material-icons">close</span>
@@ -985,12 +1021,36 @@ export default function AddCardModal({ onClose, currentCardSet, cardSetId }) {
                   <div className="font-semibold text-gray-700 mb-1">Mặt sau</div>
                   {backFields.map((field, idx) => (
                     <div key={field.id} className="flex items-center gap-2 mb-2">
-                      <input
-                        className="w-full px-4 py-2 rounded border text-lg"
-                        placeholder={field.label}
-                        value={field.value}
-                        onChange={e => updateBackField(field.id, e.target.value)}
-                      />
+                      <div className="w-full">
+                        {/* Input field for text */}
+                        <input
+                          className="w-full px-4 py-2 rounded border text-lg"
+                          placeholder={field.label}
+                          value={field.value.replace(/<img[^>]*>|<audio[^>]*>.*?<\/audio>/g, '')} // Remove media HTML for input display
+                          onChange={e => {
+                            // Preserve existing media content when updating text
+                            const mediaMatch = field.value.match(/(<img[^>]*>|<audio[^>]*>.*?<\/audio>)/g);
+                            const mediaContent = mediaMatch ? mediaMatch.join('') : '';
+                            updateBackField(field.id, e.target.value + mediaContent);
+                          }}
+                        />
+                        {/* Preview area for media content */}
+                        {(field.value.includes('<img') || field.value.includes('<audio')) && (
+                          <div className="mt-2 p-2 border border-gray-200 rounded bg-gray-50 min-h-[50px] relative">
+                            <div dangerouslySetInnerHTML={{ __html: field.value.match(/(<img[^>]*>|<audio[^>]*>.*?<\/audio>)/g)?.join('') || '' }} />
+                            <button 
+                              className="absolute top-1 right-1 px-2 py-1 bg-red-100 text-red-600 rounded text-xs hover:bg-red-200"
+                              onClick={() => {
+                                const textContent = field.value.replace(/<img[^>]*>|<audio[^>]*>.*?<\/audio>/g, '');
+                                updateBackField(field.id, textContent);
+                              }}
+                              title="Xóa media"
+                            >
+                              <span className="material-icons text-xs">delete</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
                       {idx > 0 && (
                         <button className="px-2 py-1 rounded bg-red-100 text-red-600 text-xs" title="Xóa trường" onClick={() => removeBackField(field.id)}>
                           <span className="material-icons">close</span>
@@ -1013,6 +1073,186 @@ export default function AddCardModal({ onClose, currentCardSet, cardSetId }) {
                 >Thêm</button>
               </div>
             </div>
+          
+            {/* Image Upload Modal */}
+            {showImageModal && (
+              <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-50">
+                <div className="bg-white rounded-xl shadow-lg p-6 w-[400px] flex flex-col relative">
+                  <div className="font-semibold mb-4">Thêm hình ảnh</div>
+                  
+                  <div className="mb-4">
+                    <p className="text-sm text-gray-600 mb-2">Chọn trường để thêm hình ảnh:</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <p className="text-xs font-semibold text-gray-700 mb-1">Mặt trước:</p>
+                        {frontFields.map((field) => (
+                          <button
+                            key={field.id}
+                            className="w-full px-2 py-1 mb-1 text-left rounded bg-gray-100 hover:bg-blue-100 text-sm"
+                            onClick={() => setCurrentFieldForMedia({ type: 'front', id: field.id })}
+                          >
+                            {field.label}
+                          </button>
+                        ))}
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-gray-700 mb-1">Mặt sau:</p>
+                        {backFields.map((field) => (
+                          <button
+                            key={field.id}
+                            className="w-full px-2 py-1 mb-1 text-left rounded bg-gray-100 hover:bg-blue-100 text-sm"
+                            onClick={() => setCurrentFieldForMedia({ type: 'back', id: field.id })}
+                          >
+                            {field.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    {currentFieldForMedia && (
+                      <div className="mt-4">
+                        <p className="text-sm text-green-600 mb-2">
+                          Đã chọn: {currentFieldForMedia.type === 'front' ? 'Mặt trước' : 'Mặt sau'} - {
+                            currentFieldForMedia.type === 'front' 
+                              ? frontFields.find(f => f.id === currentFieldForMedia.id)?.label
+                              : backFields.find(f => f.id === currentFieldForMedia.id)?.label
+                          }
+                        </p>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageFileSelect}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="flex gap-2 justify-end">
+                    <button
+                      className="px-4 py-2 rounded bg-gray-200 text-gray-700 hover:bg-gray-300"
+                      onClick={() => {
+                        setShowImageModal(false);
+                        setSelectedFile(null);
+                        setCurrentFieldForMedia(null);
+                      }}
+                    >
+                      Hủy
+                    </button>
+                  </div>
+                  
+                  <button 
+                    className="absolute top-2 right-2 text-gray-400 hover:text-gray-700" 
+                    onClick={() => {
+                      setShowImageModal(false);
+                      setSelectedFile(null);
+                      setCurrentFieldForMedia(null);
+                    }}
+                  >
+                    <span className="material-icons text-2xl">close</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Audio Recording Modal */}
+            {showAudioModal && (
+              <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-50">
+                <div className="bg-white rounded-xl shadow-lg p-6 w-[400px] flex flex-col relative">
+                  <div className="font-semibold mb-4">Ghi âm</div>
+                  
+                  <div className="mb-4">
+                    <p className="text-sm text-gray-600 mb-2">Chọn trường để thêm âm thanh:</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <p className="text-xs font-semibold text-gray-700 mb-1">Mặt trước:</p>
+                        {frontFields.map((field) => (
+                          <button
+                            key={field.id}
+                            className="w-full px-2 py-1 mb-1 text-left rounded bg-gray-100 hover:bg-blue-100 text-sm"
+                            onClick={() => setCurrentFieldForMedia({ type: 'front', id: field.id })}
+                          >
+                            {field.label}
+                          </button>
+                        ))}
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-gray-700 mb-1">Mặt sau:</p>
+                        {backFields.map((field) => (
+                          <button
+                            key={field.id}
+                            className="w-full px-2 py-1 mb-1 text-left rounded bg-gray-100 hover:bg-blue-100 text-sm"
+                            onClick={() => setCurrentFieldForMedia({ type: 'back', id: field.id })}
+                          >
+                            {field.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    {currentFieldForMedia && (
+                      <div className="mt-4">
+                        <p className="text-sm text-green-600 mb-2">
+                          Đã chọn: {currentFieldForMedia.type === 'front' ? 'Mặt trước' : 'Mặt sau'} - {
+                            currentFieldForMedia.type === 'front' 
+                              ? frontFields.find(f => f.id === currentFieldForMedia.id)?.label
+                              : backFields.find(f => f.id === currentFieldForMedia.id)?.label
+                          }
+                        </p>
+                        
+                        <div className="text-center">
+                          {!isRecording ? (
+                            <button
+                              className="px-6 py-3 rounded-full bg-red-500 text-white hover:bg-red-600 flex items-center gap-2 mx-auto"
+                              onClick={startRecording}
+                            >
+                              <span className="material-icons">mic</span>
+                              Bắt đầu ghi âm
+                            </button>
+                          ) : (
+                            <button
+                              className="px-6 py-3 rounded-full bg-gray-500 text-white hover:bg-gray-600 flex items-center gap-2 mx-auto"
+                              onClick={stopRecording}
+                            >
+                              <span className="material-icons">stop</span>
+                              Dừng ghi âm
+                            </button>
+                          )}
+                          
+                          {isRecording && (
+                            <p className="text-red-500 text-sm mt-2">🔴 Đang ghi âm...</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="flex gap-2 justify-end">
+                    <button
+                      className="px-4 py-2 rounded bg-gray-200 text-gray-700 hover:bg-gray-300"
+                      onClick={() => {
+                        setShowAudioModal(false);
+                        setAudioBlob(null);
+                        setCurrentFieldForMedia(null);
+                      }}
+                    >
+                      Hủy
+                    </button>
+                  </div>
+                  
+                  <button 
+                    className="absolute top-2 right-2 text-gray-400 hover:text-gray-700" 
+                    onClick={() => {
+                      setShowAudioModal(false);
+                      setAudioBlob(null);
+                      setCurrentFieldForMedia(null);
+                    }}
+                  >
+                    <span className="material-icons text-2xl">close</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-  );
-}
+        ) 
+      }
