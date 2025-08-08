@@ -60,6 +60,11 @@ function App() {
             <AddCardSetPage />
           </PrivateRoute>
         } />
+        <Route path="/edit-cardset/:cardSetId" element={
+          <PrivateRoute>
+            <AddCardSetPage />
+          </PrivateRoute>
+        } />
         <Route path="/cardset/:cardSetId" element={
           <PrivateRoute>
             <CardSetPage />

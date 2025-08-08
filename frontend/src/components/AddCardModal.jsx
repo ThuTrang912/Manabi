@@ -1,7 +1,7 @@
 
 import React from "react";
 
-export default function AddCardModal({ onClose, currentCardSet, cardSetId }) {
+export default function AddCardModal({ onClose, currentCardSet, cardSetId, editingCard, onCardEdited }) {
   // All state and handlers are now internal
   // Modal chỉnh sửa mẫu thẻ
   const [showTemplateEditor, setShowTemplateEditor] = React.useState(false);
@@ -107,13 +107,36 @@ export default function AddCardModal({ onClose, currentCardSet, cardSetId }) {
   React.useEffect(() => {
     localStorage.setItem("lastCardSet", selectedCardSet);
   }, [selectedCardSet]);
-  const [frontFields, setFrontFields] = React.useState([{ id: 1, label: "Mặt trước", value: "" }]);
-  const [backFields, setBackFields] = React.useState([{ id: 2, label: "Mặt sau", value: "" }]);
+  
+  // Initialize fields based on editingCard
+  const [frontFields, setFrontFields] = React.useState(() => {
+    if (editingCard && editingCard.type === 'term') {
+      return [{ id: 1, label: "Mặt trước", value: editingCard.currentValue || "" }];
+    } else if (editingCard && editingCard.type === 'card') {
+      return [{ id: 1, label: "Mặt trước", value: editingCard.currentValue?.term || "" }];
+    }
+    return [{ id: 1, label: "Mặt trước", value: "" }];
+  });
+  const [backFields, setBackFields] = React.useState(() => {
+    if (editingCard && editingCard.type === 'definition') {
+      return [{ id: 2, label: "Mặt sau", value: editingCard.currentValue || "" }];
+    } else if (editingCard && editingCard.type === 'card') {
+      return [{ id: 2, label: "Mặt sau", value: editingCard.currentValue?.definition || "" }];
+    }
+    return [{ id: 2, label: "Mặt sau", value: "" }];
+  });
   
   // States for image and audio functionality
   const [showImageModal, setShowImageModal] = React.useState(false);
   const [showAudioModal, setShowAudioModal] = React.useState(false);
   const [selectedFile, setSelectedFile] = React.useState(null);
+  const [currentImage, setCurrentImage] = React.useState(() => {
+    // Initialize with existing image if editing a card
+    if (editingCard && editingCard.type === 'card' && editingCard.currentValue?.image) {
+      return editingCard.currentValue.image;
+    }
+    return null;
+  });
   const [isRecording, setIsRecording] = React.useState(false);
   const [mediaRecorder, setMediaRecorder] = React.useState(null);
   const [audioBlob, setAudioBlob] = React.useState(null);
@@ -179,6 +202,10 @@ export default function AddCardModal({ onClose, currentCardSet, cardSetId }) {
             const textContent = currentField.value.replace(/<img[^>]*>|<audio[^>]*>.*?<\/audio>/g, '');
             updateBackField(id, textContent + imageHtml);
           }
+        } else if (editingCard && editingCard.type === 'card') {
+          // If editing a card and no specific field selected, set as current image
+          const imageHtml = `<img src="${imageUrl}" alt="Uploaded image" style="max-width: 200px; height: auto; border-radius: 8px; margin: 8px 0; display: block; border: 2px solid #e5e7eb; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);" />`;
+          setCurrentImage(imageHtml);
         }
         setShowImageModal(false);
         setSelectedFile(null);
@@ -251,7 +278,24 @@ export default function AddCardModal({ onClose, currentCardSet, cardSetId }) {
   };
   
   const handleAddCard = () => {
-    // Add to local state only - user will save all at once
+    // Check if this is edit mode
+    if (editingCard && onCardEdited) {
+      // Find the selected card set ID
+      const selectedCardSetData = cardSetsData.find(set => set.name === selectedCardSet);
+      const targetCardSetId = selectedCardSetData?._id || cardSetId;
+      
+      // Call the edit callback with updated content including image
+      onCardEdited({
+        front: frontFields.map(f => f.value).join(" | "),
+        back: backFields.map(f => f.value).join(" | "),
+        image: currentImage || ""  // Include current image
+      }, targetCardSetId);
+      
+      onClose();
+      return;
+    }
+    
+    // Normal add mode - Add to local state only - user will save all at once
     setAddedCards([
       ...addedCards,
       [
@@ -574,25 +618,39 @@ export default function AddCardModal({ onClose, currentCardSet, cardSetId }) {
         <button className="absolute top-4 right-4 text-gray-400 hover:text-gray-700" onClick={onClose} title="Đóng">
           <span className="material-icons text-2xl">close</span>
         </button>
-        {/* Hiển thị số thẻ đã thêm */}
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm text-gray-500">Đã thêm <b>{addedCards.length}</b> thẻ</span>
-          <div className="flex gap-2">
-            {addedCards.length > 0 && (
-              <button 
-                className="px-3 py-1 rounded bg-green-100 text-green-700 text-xs hover:bg-green-200" 
-                onClick={cardSetId ? saveAllCardsToDatabase : createCardSetAndSaveCards}
-              >
-                Lưu tất cả thẻ
-              </button>
-            )}
-            {addedCards.length > 0 && (
-              <button className="px-3 py-1 rounded bg-blue-100 text-blue-700 text-xs" onClick={() => { onClose(); setAddedCards([]); }}>
-                Đóng & Xem danh sách thẻ
-              </button>
-            )}
-          </div>
+        
+        {/* Title */}
+        <div className="mb-4">
+          <h2 className="text-xl font-bold">
+            {editingCard ? 
+              (editingCard.type === 'term' ? 'Chỉnh sửa từ' : 
+               editingCard.type === 'definition' ? 'Chỉnh sửa nghĩa' :
+               editingCard.type === 'card' ? 'Chỉnh sửa thẻ' : 'Chỉnh sửa thẻ') 
+              : 'Thêm thẻ mới'}
+          </h2>
         </div>
+        
+        {/* Hiển thị số thẻ đã thêm - chỉ khi không phải edit mode */}
+        {!editingCard && (
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm text-gray-500">Đã thêm <b>{addedCards.length}</b> thẻ</span>
+            <div className="flex gap-2">
+              {addedCards.length > 0 && (
+                <button 
+                  className="px-3 py-1 rounded bg-green-100 text-green-700 text-xs hover:bg-green-200" 
+                  onClick={cardSetId ? saveAllCardsToDatabase : createCardSetAndSaveCards}
+                >
+                  Lưu tất cả thẻ
+                </button>
+              )}
+              {addedCards.length > 0 && (
+                <button className="px-3 py-1 rounded bg-blue-100 text-blue-700 text-xs" onClick={() => { onClose(); setAddedCards([]); }}>
+                  Đóng & Xem danh sách thẻ
+                </button>
+              )}
+            </div>
+          </div>
+        )}
               {/* Thanh chức năng phía trên */}
               <div className="flex items-center gap-4 mb-2 flex-wrap">
                 {/* Hàng 1: input Kiểu và Thư mục */}
@@ -967,6 +1025,26 @@ export default function AddCardModal({ onClose, currentCardSet, cardSetId }) {
                 <button className="px-2 py-1 rounded bg-gray-100 text-gray-700" title="Chèn file"><span className="material-icons">attach_file</span></button>
                 {/* <button className="px-2 py-1 rounded bg-gray-100 text-gray-700" title="Chèn công thức"><span className="material-icons">functions</span></button> */}
               </div>
+              
+              {/* Hiển thị ảnh hiện tại nếu đang edit thẻ */}
+              {editingCard && editingCard.type === 'card' && currentImage && (
+                <div className="mb-4 p-3 border rounded-lg bg-gray-50">
+                  <div className="font-semibold text-gray-700 mb-2">Ảnh hiện tại</div>
+                  <div className="flex items-center gap-3">
+                    <div 
+                      dangerouslySetInnerHTML={{ __html: currentImage }}
+                      className="max-w-32 max-h-32 overflow-hidden border rounded"
+                    />
+                    <button 
+                      onClick={() => setCurrentImage(null)}
+                      className="px-3 py-1 rounded bg-red-100 text-red-700 text-sm hover:bg-red-200 transition"
+                    >
+                      Xóa ảnh
+                    </button>
+                  </div>
+                </div>
+              )}
+              
               {/* Các trường nhập động */}
               <div className="flex flex-col gap-2 mb-2">
                 {/* Mặt trước */}
@@ -1070,7 +1148,9 @@ export default function AddCardModal({ onClose, currentCardSet, cardSetId }) {
                   className={`px-6 py-2 rounded font-semibold ${frontFields[0].value ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
                   disabled={!frontFields[0].value}
                   onClick={handleAddCard ? handleAddCard : () => {}}
-                >Thêm</button>
+                >
+                  {editingCard ? 'Cập nhật' : 'Thêm'}
+                </button>
               </div>
             </div>
           

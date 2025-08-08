@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import TopBar from "../components/TopBar";
 import AddCardModal from "../components/AddCardModal";
+import TagMenu from "../components/TagMenu";
 
 export default function CardSetPage() {
   const { cardSetId } = useParams();
@@ -22,6 +23,9 @@ export default function CardSetPage() {
   const [currentCard, setCurrentCard] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
   const [allCards, setAllCards] = useState([]); // All cards for flashcard study
+  
+  // Menu states
+  const [showTagMenu, setShowTagMenu] = useState(false);
 
   useEffect(() => {
     fetchCardSet();
@@ -196,6 +200,18 @@ export default function CardSetPage() {
     navigate(`/cardset/${cardSetId}/study`);
   };
 
+  // Menu handlers
+  const handleEdit = () => { 
+    setShowTagMenu(false);
+    navigate(`/edit-cardset/${cardSetId}`);
+  };
+  const handleCopy = () => { setShowTagMenu(false); };
+  const handlePrint = () => { setShowTagMenu(false); };
+  const handlePin = () => { setShowTagMenu(false); };
+  const handleExport = () => { setShowTagMenu(false); };
+  const handleEmbed = () => { setShowTagMenu(false); };
+  const handleDelete = () => { setShowTagMenu(false); };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -282,31 +298,33 @@ export default function CardSetPage() {
                 </button>
               )}
               
+              <button
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 flex items-center gap-2"
+                onClick={() => {/* Handle share */}}
+              >
+                <span className="material-icons text-sm">share</span>
+                Chia sẻ
+              </button>
+              
               <div className="relative">
                 <button
-                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200"
-                  onClick={() => setShowExportMenu(!showExportMenu)}
+                  className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-300 bg-white text-gray-700 text-xl font-bold hover:bg-gray-200 transition"
+                  onClick={() => setShowTagMenu(v => !v)}
                 >
-                  Export
+                  <span className="material-icons" style={{fontSize: '1.5rem', color: 'gray'}}>more_horiz</span>
                 </button>
-                {showExportMenu && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border z-10">
-                    <button
-                      className="w-full px-4 py-2 text-left hover:bg-gray-50 rounded-lg"
-                      onClick={handleExportToAnki}
-                    >
-                      Export to Anki (.txt)
-                    </button>
-                  </div>
-                )}
+                <TagMenu
+                  show={showTagMenu}
+                  onClose={() => setShowTagMenu(false)}
+                  onEdit={handleEdit}
+                  onCopy={handleCopy}
+                  onPrint={handlePrint}
+                  onPin={handlePin}
+                  onExport={handleExport}
+                  onEmbed={handleEmbed}
+                  onDelete={handleDelete}
+                />
               </div>
-              
-              <button
-                className="px-6 py-2 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600"
-                onClick={startStudy}
-              >
-                Học
-              </button>
             </div>
           </div>
         </div>
@@ -440,26 +458,122 @@ export default function CardSetPage() {
                     <div className="mb-3">
                       <div className="text-sm text-gray-500 mb-1">Từ</div>
                       <div className="font-medium text-base card-content">
-                        <div
-                          dangerouslySetInnerHTML={{
-                            __html: card.content.front.text || ''
-                          }}
-                        />
+                        {/* Text content */}
+                        {card.content.front.text && (
+                          <div className="mb-2">
+                            <div
+                              dangerouslySetInnerHTML={{
+                                __html: card.content.front.text
+                              }}
+                            />
+                          </div>
+                        )}
+                        
+                        {/* HTML content if different from text */}
+                        {card.content.front.html && card.content.front.html !== card.content.front.text && (
+                          <>
+                            {card.content.front.text && <hr className="border-gray-300 my-2" />}
+                            <div className="mb-2">
+                              <div
+                                dangerouslySetInnerHTML={{
+                                  __html: card.content.front.html
+                                }}
+                              />
+                            </div>
+                          </>
+                        )}
+                        
+                        {/* Image content */}
+                        {card.content.front.image && (
+                          <>
+                            {(card.content.front.text || card.content.front.html) && 
+                              <hr className="border-gray-300 my-2" />}
+                            <div className="mb-2">
+                              <img 
+                                src={card.content.front.image} 
+                                alt="Front content" 
+                                className="max-w-full h-auto rounded"
+                              />
+                            </div>
+                          </>
+                        )}
+                        
+                        {/* Audio content */}
+                        {card.content.front.audio && (
+                          <>
+                            {(card.content.front.text || card.content.front.html || card.content.front.image) && 
+                              <hr className="border-gray-300 my-2" />}
+                            <div className="mb-2">
+                              <audio controls className="w-full">
+                                <source src={card.content.front.audio} />
+                                Trình duyệt không hỗ trợ audio.
+                              </audio>
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
                     
-                    {/* Divider line */}
-                    <hr className="border-gray-200 mb-3" />
+                    {/* Divider line between front and back */}
+                    <hr className="border-gray-400 mb-3" />
                     
                     {/* Back (Definition) */}
                     <div>
                       <div className="text-sm text-gray-500 mb-1">Nghĩa</div>
                       <div className="text-gray-700 card-content">
-                        <div
-                          dangerouslySetInnerHTML={{
-                            __html: card.content.back.text || ''
-                          }}
-                        />
+                        {/* Text content */}
+                        {card.content.back.text && (
+                          <div className="mb-2">
+                            <div
+                              dangerouslySetInnerHTML={{
+                                __html: card.content.back.text
+                              }}
+                            />
+                          </div>
+                        )}
+                        
+                        {/* HTML content if different from text */}
+                        {card.content.back.html && card.content.back.html !== card.content.back.text && (
+                          <>
+                            {card.content.back.text && <hr className="border-gray-300 my-2" />}
+                            <div className="mb-2">
+                              <div
+                                dangerouslySetInnerHTML={{
+                                  __html: card.content.back.html
+                                }}
+                              />
+                            </div>
+                          </>
+                        )}
+                        
+                        {/* Image content */}
+                        {card.content.back.image && (
+                          <>
+                            {(card.content.back.text || card.content.back.html) && 
+                              <hr className="border-gray-300 my-2" />}
+                            <div className="mb-2">
+                              <img 
+                                src={card.content.back.image} 
+                                alt="Back content" 
+                                className="max-w-full h-auto rounded"
+                              />
+                            </div>
+                          </>
+                        )}
+                        
+                        {/* Audio content */}
+                        {card.content.back.audio && (
+                          <>
+                            {(card.content.back.text || card.content.back.html || card.content.back.image) && 
+                              <hr className="border-gray-300 my-2" />}
+                            <div className="mb-2">
+                              <audio controls className="w-full">
+                                <source src={card.content.back.audio} />
+                                Trình duyệt không hỗ trợ audio.
+                              </audio>
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>

@@ -247,6 +247,67 @@ export const getCardSets = async (req, res) => {
   }
 };
 
+// Get single card set by ID
+export const getCardSet = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { cardSetId } = req.params;
+
+    console.log("🔍 getCardSet DEBUG:", {
+      requestedCardSetId: cardSetId,
+      userId: userId,
+      userObject: req.user,
+    });
+
+    const cardSet = await CardSet.findOne({
+      _id: cardSetId,
+      userId: userId,
+    }).populate("folderId", "name");
+
+    console.log("🔍 Database query result:", {
+      found: !!cardSet,
+      cardSetData: cardSet
+        ? {
+            id: cardSet._id,
+            name: cardSet.name,
+            userId: cardSet.userId,
+            userIdMatch: cardSet.userId.toString() === userId.toString(),
+          }
+        : null,
+    });
+
+    if (!cardSet) {
+      // Try to find cardset without userId filter to debug
+      const anyCardSet = await CardSet.findById(cardSetId);
+      console.log("🔍 CardSet exists without userId filter:", {
+        exists: !!anyCardSet,
+        actualUserId: anyCardSet?.userId,
+        requestUserId: userId,
+        match: anyCardSet?.userId.toString() === userId.toString(),
+      });
+
+      return res.status(404).json({
+        message: "Card set not found",
+        debug: {
+          cardSetId,
+          userId,
+          found: !!anyCardSet,
+          actualUserId: anyCardSet?.userId,
+        },
+      });
+    }
+
+    console.log("✅ Returning cardSet:", cardSet.name);
+    res.json(cardSet);
+  } catch (error) {
+    console.error("Get card set error:", error);
+    res.status(500).json({
+      message: "Failed to get card set",
+      error: error.message,
+    });
+  }
+};
+
 // Get cards from a set
 export const getCards = async (req, res) => {
   try {
@@ -593,6 +654,173 @@ export const createCardSet = async (req, res) => {
     console.error("Create card set error:", error);
     res.status(500).json({
       message: "Failed to create card set",
+      error: error.message,
+    });
+  }
+};
+
+// Update an existing card set
+export const updateCardSet = async (req, res) => {
+  try {
+    const { cardSetId } = req.params;
+    const { name, description, folderId } = req.body;
+    const userId = req.user.userId;
+
+    // Verify ownership
+    const cardSet = await CardSet.findOne({ _id: cardSetId, userId });
+    if (!cardSet) {
+      return res.status(404).json({ message: "Card set not found" });
+    }
+
+    // Check if new name conflicts with existing card set (excluding current one)
+    if (name && name.trim() && name.trim() !== cardSet.name) {
+      const existingCardSet = await CardSet.findOne({
+        name: name.trim(),
+        userId,
+        _id: { $ne: cardSetId },
+      });
+
+      if (existingCardSet) {
+        return res.status(409).json({
+          message: "Card set với tên này đã tồn tại",
+        });
+      }
+    }
+
+    // Update fields
+    const updateData = {};
+    if (name && name.trim()) updateData.name = name.trim();
+    if (description !== undefined) updateData.description = description;
+    if (folderId !== undefined) updateData.folderId = folderId;
+    updateData.updatedAt = new Date();
+
+    const updatedCardSet = await CardSet.findByIdAndUpdate(
+      cardSetId,
+      updateData,
+      { new: true, runValidators: true }
+    );
+
+    res.json({
+      message: "Card set updated successfully",
+      cardSet: updatedCardSet,
+    });
+  } catch (error) {
+    console.error("Update card set error:", error);
+    res.status(500).json({
+      message: "Failed to update card set",
+      error: error.message,
+    });
+  }
+};
+
+// Update individual card
+export const updateCard = async (req, res) => {
+  try {
+    const { cardId } = req.params;
+    const { frontFields, backFields } = req.body;
+    const userId = req.user.userId;
+
+    // Find the card first to verify ownership
+    const card = await Card.findById(cardId);
+    if (!card) {
+      return res.status(404).json({ message: "Card not found" });
+    }
+
+    // Verify card set ownership
+    const cardSet = await CardSet.findOne({ _id: card.cardSetId, userId });
+    if (!cardSet) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    // Validate required fields
+    if (!frontFields || !frontFields.length || !frontFields[0].value) {
+      return res.status(400).json({ message: "Front text is required" });
+    }
+
+    if (!backFields || !backFields.length || !backFields[0].value) {
+      return res.status(400).json({ message: "Back text is required" });
+    }
+
+    // Combine multiple fields for front and back
+    const frontText = frontFields
+      .map((field) => field.value)
+      .filter((v) => v.trim())
+      .join(" | ");
+    const backText = backFields
+      .map((field) => field.value)
+      .filter((v) => v.trim())
+      .join(" | ");
+
+    // Update the card
+    const updatedCard = await Card.findByIdAndUpdate(
+      cardId,
+      {
+        content: {
+          front: {
+            text: frontText,
+            image: card.content.front.image || "",
+            audio: card.content.front.audio || "",
+            html: card.content.front.html || "",
+          },
+          back: {
+            text: backText,
+            image: card.content.back.image || "",
+            audio: card.content.back.audio || "",
+            html: card.content.back.html || "",
+          },
+        },
+        "metadata.updatedAt": new Date(),
+      },
+      { new: true }
+    );
+
+    res.json({
+      message: "Card updated successfully",
+      card: updatedCard,
+    });
+  } catch (error) {
+    console.error("Update card error:", error);
+    res.status(500).json({
+      message: "Failed to update card",
+      error: error.message,
+    });
+  }
+};
+
+// Delete individual card
+export const deleteCard = async (req, res) => {
+  try {
+    const { cardId } = req.params;
+    const userId = req.user.userId;
+
+    // Find the card first to verify ownership
+    const card = await Card.findById(cardId);
+    if (!card) {
+      return res.status(404).json({ message: "Card not found" });
+    }
+
+    // Verify card set ownership
+    const cardSet = await CardSet.findOne({ _id: card.cardSetId, userId });
+    if (!cardSet) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    // Delete the card
+    await Card.findByIdAndDelete(cardId);
+
+    // Update card set stats
+    await CardSet.findByIdAndUpdate(card.cardSetId, {
+      $inc: { "stats.totalCards": -1 },
+      $set: { "metadata.updatedAt": new Date() },
+    });
+
+    res.json({
+      message: "Card deleted successfully",
+    });
+  } catch (error) {
+    console.error("Delete card error:", error);
+    res.status(500).json({
+      message: "Failed to delete card",
       error: error.message,
     });
   }

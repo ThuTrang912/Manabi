@@ -3,6 +3,7 @@ import { useParams, useLocation, useNavigate } from "react-router-dom";
 import TopBar from '../components/TopBar';
 import Sidebar from '../components/Sidebar';
 import TagMenu from '../components/TagMenu';
+import ItemMenu from '../components/ItemMenu';
 
 export default function FolderPage() {
   // Tab state for add document modal
@@ -14,6 +15,7 @@ export default function FolderPage() {
   // Folder state
   const [folder, setFolder] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
+  const [cardSets, setCardSets] = React.useState([]); // Real cardset data
   const folderName = folder?.name || "Đang tải...";
 
   // Fetch folder details from API
@@ -40,9 +42,30 @@ export default function FolderPage() {
       }
     };
 
+    const fetchCardSets = async () => {
+      try {
+        const token = localStorage.getItem("auth_token");
+        const response = await fetch("http://localhost:5001/api/cards/sets", {
+          headers: {
+            "Authorization": `Bearer ${token}`,
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setCardSets(data.cardSets || []);
+        } else {
+          console.error("Failed to fetch card sets:", response.status);
+        }
+      } catch (error) {
+        console.error("Error fetching card sets:", error);
+      }
+    };
+
     if (folderId) {
       fetchFolder();
     }
+    fetchCardSets();
   }, [folderId]);
 
   // Dummy user info (replace with real logic if needed)
@@ -59,15 +82,32 @@ export default function FolderPage() {
   const [newTag, setNewTag] = React.useState("");
   const [selectedTag, setSelectedTag] = React.useState(null); // Track selected tag
   const [showTagMenu, setShowTagMenu] = React.useState(false);
+  const [showItemMenu, setShowItemMenu] = React.useState({}); // Track which item menu is open
   // Modal for add document
   const [showAddSubfolderModal, setshowAddSubfolderModal] = React.useState(false);
   // Dummy handlers for menu actions
   const handleEdit = () => { setShowTagMenu(false); };
-  const handleDelete = () => { setShowTagMenu(false); };
-  const handleShare = () => { setShowTagMenu(false); };
+  const handleCopy = () => { setShowTagMenu(false); };
+  const handlePrint = () => { setShowTagMenu(false); };
   const handlePin = () => { setShowTagMenu(false); };
-  const handleUnpin = () => { setShowTagMenu(false); };
-  const handleAssignTag = () => { setShowTagMenu(false); };
+  const handleExport = () => { setShowTagMenu(false); };
+  const handleEmbed = () => { setShowTagMenu(false); };
+  const handleDelete = () => { setShowTagMenu(false); };
+  
+  // Handlers for item menu actions
+  const handleItemEdit = (item, itemIndex) => {
+    setShowItemMenu({});
+    // Navigate to edit cardset page with real cardset ID
+    navigate(`/edit-cardset/${item._id}`);
+  };
+  const handleItemCopy = (item, itemIndex) => { 
+    setShowItemMenu({});
+    // TODO: Implement copy functionality 
+  };
+  const handleItemDelete = (item, itemIndex) => { 
+    setShowItemMenu({});
+    // TODO: Implement delete functionality
+  };
   // Toast auto-hide
   // React.useEffect(() => {
   //   if (showTagInput) {
@@ -97,27 +137,23 @@ export default function FolderPage() {
             <>
               <div className="flex items-center justify-between w-full max-w-2xl mb-8">
                 <h1 className="text-3xl font-bold">{folderName}</h1>
-            <div className="flex gap-2 items-center">
-              {/* Selected tag button */}
-              <button className="px-4 py-1 rounded-full bg-gray-200 text-white font-semibold  border-none" style={{ minWidth: 80 }}>{selectedTag || "Học"}</button>
-              {/* Three-dot button for tag management */}
-              <div className="relative">
-                <button className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-300 bg-white text-gray-700 text-xl font-bold hover:bg-gray-200 transition" onClick={() => setShowTagMenu(v => !v)}>
-                  <span className="material-icons" style={{fontSize: '1.5rem', color: 'gray'}}>more_horiz</span>
-                </button>
-                <TagMenu
-                  show={showTagMenu}
-                  onClose={() => setShowTagMenu(false)}
-                  onEdit={handleEdit}
-                  onDelete={handleDelete}
-                  onShare={handleShare}
-                  onPin={handlePin}
-                  onUnpin={handleUnpin}
-                  onAssignTag={handleAssignTag}
-                />
+                <div className="relative">
+                  <button className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-300 bg-white text-gray-700 text-xl font-bold hover:bg-gray-200 transition" onClick={() => setShowTagMenu(v => !v)}>
+                    <span className="material-icons" style={{fontSize: '1.5rem', color: 'gray'}}>more_horiz</span>
+                  </button>
+                  <TagMenu
+                    show={showTagMenu}
+                    onClose={() => setShowTagMenu(false)}
+                    onEdit={handleEdit}
+                    onCopy={handleCopy}
+                    onPrint={handlePrint}
+                    onPin={handlePin}
+                    onExport={handleExport}
+                    onEmbed={handleEmbed}
+                    onDelete={handleDelete}
+                  />
+                </div>
               </div>
-            </div>
-          </div>
           {/* Tag bar */}
           <div className="flex gap-2 mb-4 items-center">
             {/* All tag button */}
@@ -223,41 +259,83 @@ export default function FolderPage() {
                 </div>
                 {/* List of items */}
                 <div className="flex flex-col gap-2 mb-4" style={{maxHeight: '680px', overflowY: 'auto'}}>
-                  {[
-                    {name: 'test học phần', terms: 2},
-                    {name: 'かきくけこ', terms: 522},
-                    {name: 'あいうえお', terms: 322},
-                    {name: 'Chuc nang cua code arduino', terms: 130},
-                    {name: 'ばびぶべぼ', terms: 148},
-                    {name: 'はひふへほ', terms: 369},
-                    {name: 'らりるれろ', terms: 12},
-                    {name: 'がぎぐげご', terms: 42},
-                    {name: 'ばびぶべぼ', terms: 45},
-                    {name: 'ざじずぜぞ', terms: 32},
-                    {name: 'test học phần 2', terms: 5},
-                    {name: 'かきくけこ 2', terms: 100},
-                    {name: 'あいうえお 2', terms: 200},
-                    {name: 'Chuc nang code 2', terms: 50},
-                    {name: 'ばびぶべぼ 2', terms: 80},
-                    {name: 'はひふへほ 2', terms: 150},
-                    {name: 'らりるれろ 2', terms: 20},
-                    {name: 'がぎぐげご 2', terms: 60},
-                    {name: 'ばびぶべぼ 3', terms: 90},
-                    {name: 'ざじずぜぞ 2', terms: 40}
-                  ].map((item, idx) => (
-                    <div key={idx} className="flex items-center justify-between px-2 py-2 rounded-lg hover:bg-gray-50 transition">
+                  {cardSets.length > 0 ? cardSets.map((item, idx) => (
+                    <div key={item._id} className="flex items-center justify-between px-2 py-2 rounded-lg hover:bg-gray-50 transition">
                       <div className="flex items-center gap-3">
                         <span className="material-icons text-blue-400 text-3xl">menu_book</span>
                         <div>
                           <div className="font-semibold text-base text-gray-800">{item.name}</div>
-                          <div className="text-xs text-gray-500">Học phần ・ {item.terms} terms</div>
+                          <div className="text-xs text-gray-500">
+                            Học phần ・ {item.stats?.totalCards || 0} thẻ
+                            {item.source && item.source !== "manual" && (
+                              <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-600 rounded text-xs">
+                                {item.source === "quizlet" ? "Quizlet" : 
+                                 item.source === "anki" ? "Anki" : 
+                                 item.source.charAt(0).toUpperCase() + item.source.slice(1)}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
-                      <button className="w-8 h-8 flex items-center justify-center rounded-full bg-white border border-gray-300 text-blue-500 text-xl font-bold hover:bg-blue-100 transition">
-                        <span className="material-icons">add</span>
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button className="w-8 h-8 flex items-center justify-center rounded-full bg-white border border-gray-300 text-blue-500 text-xl font-bold hover:bg-blue-100 transition">
+                          <span className="material-icons">add</span>
+                        </button>
+                        <div className="relative">
+                          <button 
+                            className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-300 bg-white text-gray-700 hover:bg-gray-200 transition"
+                            onClick={() => setShowItemMenu(prev => ({...prev, [idx]: !prev[idx]}))}
+                          >
+                            <span className="material-icons" style={{fontSize: '1rem', color: 'gray'}}>more_vert</span>
+                          </button>
+                          <ItemMenu
+                            show={showItemMenu[idx]}
+                            onClose={() => setShowItemMenu(prev => ({...prev, [idx]: false}))}
+                            onEdit={() => handleItemEdit(item, idx)}
+                            onCopy={() => handleItemCopy(item, idx)}
+                            onDelete={() => handleItemDelete(item, idx)}
+                          />
+                        </div>
+                      </div>
                     </div>
-                  ))}
+                  )) : (
+                    // Fallback to dummy data if no real data
+                    [
+                      {name: 'test học phần', terms: 2, id: 'test-1', _id: 'dummy-1'},
+                      {name: 'かきくけこ', terms: 522, id: 'kakikukeko', _id: 'dummy-2'},
+                      {name: 'あいうえお', terms: 322, id: 'aiueo', _id: 'dummy-3'},
+                    ].map((item, idx) => (
+                      <div key={item._id} className="flex items-center justify-between px-2 py-2 rounded-lg hover:bg-gray-50 transition">
+                        <div className="flex items-center gap-3">
+                          <span className="material-icons text-blue-400 text-3xl">menu_book</span>
+                          <div>
+                            <div className="font-semibold text-base text-gray-800">{item.name}</div>
+                            <div className="text-xs text-gray-500">Học phần ・ {item.terms} terms</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button className="w-8 h-8 flex items-center justify-center rounded-full bg-white border border-gray-300 text-blue-500 text-xl font-bold hover:bg-blue-100 transition">
+                            <span className="material-icons">add</span>
+                          </button>
+                          <div className="relative">
+                            <button 
+                              className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-300 bg-white text-gray-700 hover:bg-gray-200 transition"
+                              onClick={() => setShowItemMenu(prev => ({...prev, [idx]: !prev[idx]}))}
+                            >
+                              <span className="material-icons" style={{fontSize: '1rem', color: 'gray'}}>more_vert</span>
+                            </button>
+                            <ItemMenu
+                              show={showItemMenu[idx]}
+                              onClose={() => setShowItemMenu(prev => ({...prev, [idx]: false}))}
+                              onEdit={() => handleItemEdit(item, idx)}
+                              onCopy={() => handleItemCopy(item, idx)}
+                              onDelete={() => handleItemDelete(item, idx)}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
                 
                 <div className="flex justify-end mt-4">
