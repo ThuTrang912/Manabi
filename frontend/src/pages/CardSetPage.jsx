@@ -223,7 +223,7 @@ export default function CardSetPage() {
 
   // Flashcard navigation functions
   const nextCard = () => {
-    if (currentCard < allCards.length - 1) {
+    if (currentCard < studyCards.length - 1) {
       setCurrentCard(currentCard + 1);
       setShowAnswer(false);
     }
@@ -325,25 +325,28 @@ export default function CardSetPage() {
       .replace(/^[^a-z0-9áàảãạâấầẩẫậăắằẳẵặéèẻẽẹêếềểễệíìỉĩịóòỏõọôốồổỗộơớờởỡợúùủũụưứừửữựýỳỷỹỵđ]/i, '')
   };
 
-  // Build base list with original indexes to preserve highlight even after sorting
-  const buildBaseCards = () => {
-    if (showAllCards) {
-      return allCards.map((c, idx) => ({ card: c, originalIndex: idx }));
-    } else {
-      // Current page only: need global index
-      const startIndex = (currentPage - 1) * 50;
-      return cards.map((c, idx) => ({ card: c, originalIndex: startIndex + idx }));
-    }
+  // Multilingual first-key extraction (Latin, Kana, Kanji, Hangul, digits). Fallback '#'
+  const getAlphabeticalKey = (raw) => {
+    if (!raw) return '#';
+    const text = raw.trim();
+    if (!text) return '#';
+    const ch = text[0];
+    if (/^[A-Za-z]$/.test(ch)) return ch.toUpperCase();
+    if (/^[0-9]$/.test(ch)) return ch;
+    if (/^[\u3040-\u309F]$/.test(ch)) return ch; // Hiragana
+    if (/^[\u30A0-\u30FF]$/.test(ch)) return ch; // Katakana
+    if (/^[\u4E00-\u9FFF]$/.test(ch)) return ch; // CJK Unified Ideographs
+    if (/^[\uAC00-\uD7AF]$/.test(ch)) return ch; // Hangul syllables
+    return ch || '#';
   };
 
-  const sortBaseCards = (list) => {
-    if (!list || !list.length) return list;
+  // Global sort helper on raw card objects
+  const sortCards = (arr) => {
     const { field, direction } = sortConfig;
-    if (field === 'default' || !field) return list;
-
+    if (!arr || !arr.length) return arr;
+    if (field === 'default' || !field) return arr;
     const dir = direction === 'desc' ? -1 : 1;
-    return [...list].sort((aObj, bObj) => {
-      const a = aObj.card; const b = bObj.card;
+    return [...arr].sort((a, b) => {
       let va = '';
       let vb = '';
       switch (field) {
@@ -351,21 +354,28 @@ export default function CardSetPage() {
           va = extractPlainText(a?.content?.front?.text || a?.content?.front?.html || '');
           vb = extractPlainText(b?.content?.front?.text || b?.content?.front?.html || '');
           break;
-        case 'alphabetical':
-          va = normalizeAlpha(extractPlainText(a?.content?.front?.text || a?.content?.front?.html || ''));
-          vb = normalizeAlpha(extractPlainText(b?.content?.front?.text || b?.content?.front?.html || ''));
+        case 'alphabetical': {
+          const ta = extractPlainText(a?.content?.front?.text || a?.content?.front?.html || '');
+            const tb = extractPlainText(b?.content?.front?.text || b?.content?.front?.html || '');
+            const ka = getAlphabeticalKey(ta);
+            const kb = getAlphabeticalKey(tb);
+            if (ka === kb) {
+              return ta.localeCompare(tb, ['vi','ja','en'], { sensitivity: 'base' }) * dir;
+            }
+            return ka.localeCompare(kb, ['vi','ja','en'], { sensitivity: 'base' }) * dir;
+        }
           break;
         case 'backText':
           va = extractPlainText(a?.content?.back?.text || a?.content?.back?.html || '');
           vb = extractPlainText(b?.content?.back?.text || b?.content?.back?.html || '');
           break;
         case 'createdAt':
-          va = a?.createdAt || '';
-          vb = b?.createdAt || '';
+          va = a?.metadata?.createdAt || a?.createdAt || '';
+          vb = b?.metadata?.createdAt || b?.createdAt || '';
           break;
         case 'updatedAt':
-          va = a?.updatedAt || '';
-          vb = b?.updatedAt || '';
+          va = a?.metadata?.updatedAt || a?.updatedAt || '';
+          vb = b?.metadata?.updatedAt || b?.updatedAt || '';
           break;
         case 'difficulty':
           va = a?.learning?.easeFactor ?? 0;
@@ -374,21 +384,32 @@ export default function CardSetPage() {
         default:
           return 0;
       }
-      // Numeric compare
-      if (typeof va === 'number' && typeof vb === 'number') {
-        return (va - vb) * dir;
-      }
-      // Date compare if looks like ISO
-      if (/(\d{4}-\d{2}-\d{2}T)/.test(va) && /(\d{4}-\d{2}-\d{2}T)/.test(vb)) {
-        return (new Date(va).getTime() - new Date(vb).getTime()) * dir;
-      }
-      // String compare
-      return va.localeCompare(vb, 'vi', { sensitivity: 'base' }) * dir;
+      if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir;
+      const da = Date.parse(va); const db = Date.parse(vb);
+      if (!isNaN(da) && !isNaN(db)) return (da - db) * dir;
+      return va.toString().localeCompare(vb.toString(), 'vi', { sensitivity: 'base' }) * dir;
     });
   };
 
-  const baseCards = buildBaseCards();
-  let displayedCards = sortBaseCards(baseCards);
+  // Full sorted list + star filter
+  const fullSortedCards = useMemo(() => {
+    let list = sortCards(allCards);
+    if (showStarredOnly) list = list.filter(c => starredIds.has(c._id));
+    return list.map((c, idx) => ({ ...c, _sortedIndex: idx }));
+  }, [allCards, sortConfig, showStarredOnly, starredIds]);
+
+  // Build displayedCards honoring pagination when collapsed
+  let displayedCards = [];
+  if (showAllCards) {
+    displayedCards = fullSortedCards.map(c => ({ card: c, sortedIndex: c._sortedIndex }));
+  } else {
+    const pageSize = 50;
+    const start = (currentPage - 1) * pageSize;
+    const slice = fullSortedCards.slice(start, start + pageSize);
+    displayedCards = slice.map(c => ({ card: c, sortedIndex: c._sortedIndex }));
+  }
+
+  const studyCards = fullSortedCards; // same ordering for study modes
   const isStarred = (id) => !!id && starredIds.has(id);
   const toggleStar = async (id) => {
     if (!id) return;
@@ -431,6 +452,17 @@ export default function CardSetPage() {
   if (showStarredOnly) {
     displayedCards = displayedCards.filter(obj => isStarred(obj.card._id));
   }
+
+  // Build study cards (always based on allCards, full set) respecting sorting & star filter
+  // studyCards now derived from fullSortedCards (see above)
+
+  // Reset flashcard index if filtering/sorting changes and index out of range
+  useEffect(() => {
+    if (currentCard >= studyCards.length) {
+      setCurrentCard(0);
+      setShowAnswer(false);
+    }
+  }, [studyCards.length]);
 
   const handleChangeSortField = (e) => {
     setSortConfig(cfg => ({ ...cfg, field: e.target.value }));
@@ -557,7 +589,7 @@ export default function CardSetPage() {
         </div>
 
         {/* Flashcard Study Section */}
-        {allCards.length > 0 && (
+  {studyCards.length > 0 && (
           <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
             <h2 className="text-lg font-semibold mb-4">Học với thẻ ghi nhớ</h2>
             
@@ -607,7 +639,7 @@ export default function CardSetPage() {
             {showAutoFlashcard ? (
               <div className="mb-6">
                 <AutoFlashcard 
-                  cards={allCards} 
+                  cards={studyCards} 
                   onHighlight={handleFlashcardHighlight}
                 />
               </div>
@@ -639,8 +671,8 @@ export default function CardSetPage() {
                             }}
                             dangerouslySetInnerHTML={{
                               __html: showAnswer 
-                                ? allCards[currentCard]?.content.back.text || ''
-                                : allCards[currentCard]?.content.front.text || ''
+                                ? studyCards[currentCard]?.content.back.text || ''
+                                : studyCards[currentCard]?.content.front.text || ''
                             }}
                           />
                         </div>
@@ -657,10 +689,10 @@ export default function CardSetPage() {
                 {/* Star button */}
                 <button
                   className="absolute bottom-3 right-3 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-md"
-                  onClick={(e)=>{e.stopPropagation(); const id = allCards[currentCard]?._id; toggleStar(id);}}
-                  title={isStarred(allCards[currentCard]?._id) ? 'Bỏ sao' : 'Đánh dấu sao'}
+                  onClick={(e)=>{e.stopPropagation(); const id = studyCards[currentCard]?._id; toggleStar(id);}}
+                  title={isStarred(studyCards[currentCard]?._id) ? 'Bỏ sao' : 'Đánh dấu sao'}
                 >
-                  <span className={`material-icons text-sm ${isStarred(allCards[currentCard]?._id) ? 'text-yellow-500' : 'text-gray-400'}`}>{isStarred(allCards[currentCard]?._id) ? 'star' : 'star_border'}</span>
+                  <span className={`material-icons text-sm ${isStarred(studyCards[currentCard]?._id) ? 'text-yellow-500' : 'text-gray-400'}`}>{isStarred(studyCards[currentCard]?._id) ? 'star' : 'star_border'}</span>
                 </button>
               </div>
             </div>
@@ -676,14 +708,14 @@ export default function CardSetPage() {
               </button>
               
               <div className="text-center">
-                <div className="text-lg font-semibold">{currentCard + 1} / {allCards.length}</div>
+                <div className="text-lg font-semibold">{currentCard + 1} / {studyCards.length}</div>
                 <div className="text-xs text-gray-500">Thẻ hiện tại</div>
               </div>
 
               <button 
                 className="w-10 h-10 bg-white rounded-full shadow border flex items-center justify-center disabled:opacity-50 hover:bg-gray-50"
                 onClick={nextCard}
-                disabled={currentCard === allCards.length - 1}
+                disabled={currentCard === studyCards.length - 1}
               >
                 <span className="material-icons text-sm">arrow_forward</span>
               </button>
@@ -770,12 +802,11 @@ export default function CardSetPage() {
                 const groups = {};
                 displayedCards.forEach((it) => {
                   const rawFront = extractPlainText(it.card?.content?.front?.text || it.card?.content?.front?.html || '');
-                  let first = normalizeAlpha(rawFront).charAt(0).toUpperCase();
-                  if (!first || !/[A-Z0-9]/.test(first)) first = '#';
-                  if (!groups[first]) groups[first] = [];
-                  groups[first].push(it);
+                  let key = getAlphabeticalKey(rawFront);
+                  if (!groups[key]) groups[key] = [];
+                  groups[key].push(it);
                 });
-                const orderedKeys = Object.keys(groups).sort((a,b) => a.localeCompare(b));
+                const orderedKeys = Object.keys(groups).sort((a,b) => a.localeCompare(b, ['vi','ja','en']));
                 return orderedKeys.map(letter => (
                   <div key={letter} className="border-b last:border-b-0">
                     <div className="sticky top-0 z-10 bg-gray-100/90 backdrop-blur px-3 py-1 text-xs font-semibold text-gray-600 uppercase tracking-wide">{letter}</div>
