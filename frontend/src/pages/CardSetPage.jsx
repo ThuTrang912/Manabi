@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import TopBar from "../components/TopBar";
 import AddCardModal from "../components/AddCardModal";
 import TagMenu from "../components/TagMenu";
+import AutoFlashcard from "../components/AutoFlashcard";
 
 export default function CardSetPage() {
   const { cardSetId } = useParams();
@@ -26,6 +27,13 @@ export default function CardSetPage() {
   
   // Menu states
   const [showTagMenu, setShowTagMenu] = useState(false);
+  
+  // Auto flashcard states
+  const [showAutoFlashcard, setShowAutoFlashcard] = useState(false);
+  const [highlightedCardIndex, setHighlightedCardIndex] = useState(-1);
+  
+  // Refs for scrolling
+  const cardListRef = useRef(null);
 
   useEffect(() => {
     fetchCardSet();
@@ -196,6 +204,30 @@ export default function CardSetPage() {
     }
   };
 
+  // Handle flashcard highlight and scroll
+  const handleFlashcardHighlight = (index) => {
+    setHighlightedCardIndex(index);
+    
+    // Force show all cards when auto flashcard is active
+    if (!showAllCards) {
+      setShowAllCards(true);
+    }
+    
+    // Auto scroll to highlighted card
+    setTimeout(() => {
+      if (cardListRef.current) {
+        const cardElements = cardListRef.current.querySelectorAll('[data-card-index]');
+        const targetCard = cardElements[index];
+        if (targetCard) {
+          targetCard.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'center' 
+          });
+        }
+      }
+    }, 100);
+  };
+
   const startStudy = () => {
     navigate(`/cardset/${cardSetId}/study`);
   };
@@ -340,6 +372,17 @@ export default function CardSetPage() {
                 <span className="material-icons text-sm">credit_card</span>
                 Thẻ ghi nhớ
               </button>
+              <button 
+                onClick={() => setShowAutoFlashcard(!showAutoFlashcard)}
+                className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 text-sm ${
+                  showAutoFlashcard 
+                    ? 'bg-green-100 text-green-600' 
+                    : 'bg-gray-100 text-gray-600'
+                }`}
+              >
+                <span className="material-icons text-sm">play_circle</span>
+                Auto Flashcard
+              </button>
               <button className="bg-gray-100 text-gray-600 px-4 py-2 rounded-lg font-medium flex items-center gap-2 text-sm">
                 <span className="material-icons text-sm">refresh</span>
                 Học
@@ -354,13 +397,23 @@ export default function CardSetPage() {
               </button>
             </div>
 
-            {/* Card display */}
-            <div className="flex justify-center mb-6">
-              <div className="relative">
-                <div 
-                  className="w-80 h-48 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow-lg border cursor-pointer flex items-center justify-center text-center p-6 transition-all hover:scale-105 hover:shadow-xl"
-                  onClick={toggleAnswer}
-                >
+            {/* Conditional display: AutoFlashcard or regular flashcard */}
+            {showAutoFlashcard ? (
+              <div className="mb-6">
+                <AutoFlashcard 
+                  cards={allCards} 
+                  onHighlight={handleFlashcardHighlight}
+                />
+              </div>
+            ) : (
+              <>
+                {/* Card display */}
+                <div className="flex justify-center mb-6">
+                  <div className="relative">
+                    <div 
+                      className="w-80 h-48 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow-lg border cursor-pointer flex items-center justify-center text-center p-6 transition-all hover:scale-105 hover:shadow-xl"
+                      onClick={toggleAnswer}
+                    >
                   <div className="w-full">
                     <div className="text-xl font-bold mb-3 card-content">
                       <div
@@ -423,6 +476,8 @@ export default function CardSetPage() {
                 </button>
               </div>
             </div>
+              </>
+            )}
           </div>
         )}
 
@@ -444,13 +499,28 @@ export default function CardSetPage() {
             </button>
           </div>
           
-          <div className="divide-y max-h-96 overflow-y-auto">
-            {cards.map((card, index) => (
-              <div key={card._id} className="p-4 hover:bg-gray-50">
-                <div className="flex items-start gap-4">
-                  <div className="text-sm text-gray-400 w-8 flex-shrink-0">
-                    {showAllCards ? index + 1 : (currentPage - 1) * 50 + index + 1}
-                  </div>
+          <div ref={cardListRef} className="divide-y max-h-96 overflow-y-auto">
+            {cards.map((card, index) => {
+              // Calculate the actual index in allCards array for highlighting
+              let actualIndex = index;
+              if (!showAllCards) {
+                actualIndex = (currentPage - 1) * 50 + index;
+              }
+              
+              const isHighlighted = highlightedCardIndex === actualIndex;
+              
+              return (
+                <div 
+                  key={card._id} 
+                  data-card-index={actualIndex}
+                  className={`p-4 hover:bg-gray-50 transition-colors ${
+                    isHighlighted ? 'bg-yellow-100 border-l-4 border-yellow-400' : ''
+                  }`}
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="text-sm text-gray-400 w-8 flex-shrink-0">
+                      {showAllCards ? index + 1 : (currentPage - 1) * 50 + index + 1}
+                    </div>
                   
                   {/* Vertical layout for term and definition */}
                   <div className="flex-1">
@@ -587,7 +657,8 @@ export default function CardSetPage() {
                   )}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
           
           {/* Pagination - only show when not showing all cards */}
