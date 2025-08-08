@@ -205,7 +205,8 @@ export default function CardSetPage() {
   };
 
   // Handle flashcard highlight and scroll
-  const handleFlashcardHighlight = (index) => {
+  const handleFlashcardHighlight = (index, shouldScroll = true) => {
+    console.log('Flashcard highlight:', { index, shouldScroll });
     setHighlightedCardIndex(index);
     
     // Force show all cards when auto flashcard is active
@@ -213,19 +214,24 @@ export default function CardSetPage() {
       setShowAllCards(true);
     }
     
-    // Auto scroll to highlighted card
-    setTimeout(() => {
-      if (cardListRef.current) {
-        const cardElements = cardListRef.current.querySelectorAll('[data-card-index]');
-        const targetCard = cardElements[index];
-        if (targetCard) {
-          targetCard.scrollIntoView({ 
-            behavior: 'smooth', 
-            block: 'center' 
-          });
+    // Only scroll if shouldScroll is true
+    if (shouldScroll) {
+      setTimeout(() => {
+        if (cardListRef.current) {
+          const cardElements = cardListRef.current.querySelectorAll('[data-card-index]');
+          const targetCard = cardElements[index];
+          if (targetCard) {
+            console.log('Scrolling to card:', index);
+            targetCard.scrollIntoView({ 
+              behavior: 'smooth', 
+              block: 'center' 
+            });
+          }
         }
-      }
-    }, 100);
+      }, 100);
+    } else {
+      console.log('Highlighting card', index, 'but not scrolling');
+    }
   };
 
   const startStudy = () => {
