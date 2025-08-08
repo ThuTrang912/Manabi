@@ -3,6 +3,7 @@ import AnkiIntegrationService from "../services/AnkiIntegrationService.js";
 import SimpleImportService from "../services/SimpleImportService.js";
 import CardSet from "../models/CardSet.js";
 import Card from "../models/Card.js";
+import StarredCard from "../models/StarredCard.js";
 import multer from "multer";
 import path from "path";
 
@@ -305,6 +306,46 @@ export const getCardSet = async (req, res) => {
       message: "Failed to get card set",
       error: error.message,
     });
+  }
+};
+
+// Toggle star for a card (user-specific)
+export const toggleStarCard = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { cardId } = req.params;
+    const card = await Card.findById(cardId);
+    if (!card) return res.status(404).json({ message: "Card not found" });
+
+    const existing = await StarredCard.findOne({ userId, cardId });
+    if (existing) {
+      await StarredCard.deleteOne({ _id: existing._id });
+      return res.json({ starred: false });
+    }
+    await StarredCard.create({ userId, cardId, cardSetId: card.cardSetId });
+    res.json({ starred: true });
+  } catch (e) {
+    console.error("Toggle star error:", e);
+    res
+      .status(500)
+      .json({ message: "Failed to toggle star", error: e.message });
+  }
+};
+
+// Get starred card ids for a user in a set
+export const getStarredCards = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { cardSetId } = req.params;
+    const stars = await StarredCard.find({ userId, cardSetId }).select(
+      "cardId"
+    );
+    res.json({ cardIds: stars.map((s) => s.cardId) });
+  } catch (e) {
+    console.error("Get starred error:", e);
+    res
+      .status(500)
+      .json({ message: "Failed to get starred", error: e.message });
   }
 };
 

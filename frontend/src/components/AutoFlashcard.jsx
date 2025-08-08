@@ -156,6 +156,20 @@ const AutoFlashcard = ({ cards, onHighlight }) => {
     }
   }, [isPlaying]);
 
+  // Cleanup on component unmount - Stop speech when leaving AutoFlashcard
+  useEffect(() => {
+    return () => {
+      console.log('AutoFlashcard unmounting - stopping all speech');
+      speechSynthesis.cancel();
+      setIsReading(false);
+      // Clear any pending intervals or timeouts
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, []);
+
   const speak = (text, lang, isFrontSide = true) => {
     if (!('speechSynthesis' in window) || !text || !text.trim()) {
       // If no speech synthesis or no text, auto flip after short delay
@@ -583,19 +597,31 @@ const AutoFlashcard = ({ cards, onHighlight }) => {
         <div
           ref={cardRef}
           onClick={flipCard}
-          className="w-80 h-48 border-2 border-gray-300 rounded-xl flex items-center justify-center cursor-pointer bg-gradient-to-br from-blue-50 to-indigo-100 hover:from-blue-100 hover:to-indigo-200 transition-all duration-300 shadow-lg"
+          className="w-96 h-64 border-2 border-gray-300 rounded-xl cursor-pointer bg-gradient-to-br from-blue-50 to-indigo-100 hover:from-blue-100 hover:to-indigo-200 transition-all duration-300 shadow-lg flex flex-col overflow-hidden"
           style={{ userSelect: 'none' }}
         >
-          <div className="text-center px-4">
-            <div className="text-xs text-gray-500 mb-2">
+          {/* Header */}
+          <div className="px-4 py-2 flex-shrink-0 border-b border-gray-200/50 bg-white/70">
+            <div className="text-xs text-gray-500 text-center">
               {isFront ? 'Mặt trước' : 'Mặt sau'}
             </div>
-            <div 
-              className="text-lg font-medium"
-              dangerouslySetInnerHTML={{ 
-                __html: isFront ? frontText : backText 
-              }}
-            />
+          </div>
+          
+          {/* Content with scroll */}
+          <div className="flex-1 p-4 overflow-y-auto flashcard-content">
+            <div className="h-full flex items-center justify-center">
+              <div 
+                className="text-lg font-medium text-center flashcard-text w-full"
+                style={{ 
+                  wordWrap: 'break-word',
+                  overflowWrap: 'break-word',
+                  hyphens: 'auto'
+                }}
+                dangerouslySetInnerHTML={{ 
+                  __html: isFront ? frontText : backText 
+                }}
+              />
+            </div>
           </div>
         </div>
       </div>

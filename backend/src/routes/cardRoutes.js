@@ -14,6 +14,8 @@ import {
   updateCard,
   deleteCard,
   upload,
+  toggleStarCard,
+  getStarredCards,
 } from "../controllers/cardController.js";
 import authMiddleware from "../middleware/authMiddleware.js";
 
@@ -33,6 +35,9 @@ router.get("/export/anki/:cardSetId", exportToAnki);
 router.post("/sets", createCardSet);
 router.get("/sets", getCardSets);
 router.get("/sets/:cardSetId", getCardSet);
+// Star routes
+router.post("/cards/:cardId/star", toggleStarCard);
+router.get("/sets/:cardSetId/starred", getStarredCards);
 router.put("/sets/:cardSetId", updateCardSet);
 router.get("/sets/:cardSetId/cards", getCards);
 router.post("/sets/:cardSetId/sync", syncWithSource);

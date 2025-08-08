@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import TopBar from "../components/TopBar";
 import AddCardModal from "../components/AddCardModal";
@@ -32,6 +32,12 @@ export default function CardSetPage() {
   const [showAutoFlashcard, setShowAutoFlashcard] = useState(false);
   const [highlightedCardIndex, setHighlightedCardIndex] = useState(-1);
   
+  // Sorting state
+  const [sortConfig, setSortConfig] = useState({ field: 'default', direction: 'asc' });
+  // Star / favorite state
+  const [starredIds, setStarredIds] = useState(new Set());
+  const [showStarredOnly, setShowStarredOnly] = useState(false);
+  
   // Refs for scrolling
   const cardListRef = useRef(null);
 
@@ -39,6 +45,14 @@ export default function CardSetPage() {
     fetchCardSet();
     fetchAllCards(); // Fetch all cards for flashcard study
   }, [cardSetId]);
+
+  // Cleanup on component unmount or page navigation
+  useEffect(() => {
+    return () => {
+      console.log('CardSetPage unmounting - stopping speech');
+      speechSynthesis.cancel();
+    };
+  }, []);
 
   // Separate useEffect for pagination to avoid infinite loop
   useEffect(() => {
@@ -53,6 +67,36 @@ export default function CardSetPage() {
       fetchCardSet();
     }
   }, [showAllCards]);
+
+  // Fetch starred cards from backend (with one-time migration from localStorage if exists)
+  useEffect(() => {
+    const loadStars = async () => {
+      if (!cardSetId) return;
+      const token = localStorage.getItem('auth_token');
+      try {
+        const res = await fetch(`http://localhost:5001/api/cards/sets/${cardSetId}/starred`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && Array.isArray(data.cardIds)) {
+            setStarredIds(new Set(data.cardIds.map(id => id.toString())));
+          }
+        } else if (res.status === 404) {
+          setStarredIds(new Set());
+        }
+      } catch (e) {
+        console.warn('Backend star fetch failed, using localStorage fallback', e);
+        try {
+          const raw = localStorage.getItem(`starred_cards_${cardSetId}`);
+          if (raw) {
+            setStarredIds(new Set(JSON.parse(raw)));
+          }
+        } catch {}
+      }
+    };
+    loadStars();
+  }, [cardSetId]);
 
   const fetchAllCards = async () => {
     try {
@@ -234,6 +278,20 @@ export default function CardSetPage() {
     }
   };
 
+  // Handle AutoFlashcard toggle with speech cleanup
+  const handleAutoFlashcardToggle = () => {
+    const newShowAutoFlashcard = !showAutoFlashcard;
+    
+    if (!newShowAutoFlashcard) {
+      // When turning OFF AutoFlashcard, stop any ongoing speech
+      console.log('Turning off AutoFlashcard - stopping speech');
+      speechSynthesis.cancel();
+      setHighlightedCardIndex(-1); // Clear highlight
+    }
+    
+    setShowAutoFlashcard(newShowAutoFlashcard);
+  };
+
   const startStudy = () => {
     navigate(`/cardset/${cardSetId}/study`);
   };
@@ -249,6 +307,137 @@ export default function CardSetPage() {
   const handleExport = () => { setShowTagMenu(false); };
   const handleEmbed = () => { setShowTagMenu(false); };
   const handleDelete = () => { setShowTagMenu(false); };
+
+  // Helper: extract plain text for sorting (basic strip HTML)
+  const extractPlainText = (html) => {
+    if (!html) return '';
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    return (tmp.textContent || tmp.innerText || '').trim();
+  };
+
+  const normalizeAlpha = (text) => {
+    if (!text) return '';
+    return text
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // remove accents
+      .replace(/^[^a-z0-9áàảãạâấầẩẫậăắằẳẵặéèẻẽẹêếềểễệíìỉĩịóòỏõọôốồổỗộơớờởỡợúùủũụưứừửữựýỳỷỹỵđ]/i, '')
+  };
+
+  // Build base list with original indexes to preserve highlight even after sorting
+  const buildBaseCards = () => {
+    if (showAllCards) {
+      return allCards.map((c, idx) => ({ card: c, originalIndex: idx }));
+    } else {
+      // Current page only: need global index
+      const startIndex = (currentPage - 1) * 50;
+      return cards.map((c, idx) => ({ card: c, originalIndex: startIndex + idx }));
+    }
+  };
+
+  const sortBaseCards = (list) => {
+    if (!list || !list.length) return list;
+    const { field, direction } = sortConfig;
+    if (field === 'default' || !field) return list;
+
+    const dir = direction === 'desc' ? -1 : 1;
+    return [...list].sort((aObj, bObj) => {
+      const a = aObj.card; const b = bObj.card;
+      let va = '';
+      let vb = '';
+      switch (field) {
+        case 'frontText':
+          va = extractPlainText(a?.content?.front?.text || a?.content?.front?.html || '');
+          vb = extractPlainText(b?.content?.front?.text || b?.content?.front?.html || '');
+          break;
+        case 'alphabetical':
+          va = normalizeAlpha(extractPlainText(a?.content?.front?.text || a?.content?.front?.html || ''));
+          vb = normalizeAlpha(extractPlainText(b?.content?.front?.text || b?.content?.front?.html || ''));
+          break;
+        case 'backText':
+          va = extractPlainText(a?.content?.back?.text || a?.content?.back?.html || '');
+          vb = extractPlainText(b?.content?.back?.text || b?.content?.back?.html || '');
+          break;
+        case 'createdAt':
+          va = a?.createdAt || '';
+          vb = b?.createdAt || '';
+          break;
+        case 'updatedAt':
+          va = a?.updatedAt || '';
+          vb = b?.updatedAt || '';
+          break;
+        case 'difficulty':
+          va = a?.learning?.easeFactor ?? 0;
+          vb = b?.learning?.easeFactor ?? 0;
+          break;
+        default:
+          return 0;
+      }
+      // Numeric compare
+      if (typeof va === 'number' && typeof vb === 'number') {
+        return (va - vb) * dir;
+      }
+      // Date compare if looks like ISO
+      if (/(\d{4}-\d{2}-\d{2}T)/.test(va) && /(\d{4}-\d{2}-\d{2}T)/.test(vb)) {
+        return (new Date(va).getTime() - new Date(vb).getTime()) * dir;
+      }
+      // String compare
+      return va.localeCompare(vb, 'vi', { sensitivity: 'base' }) * dir;
+    });
+  };
+
+  const baseCards = buildBaseCards();
+  let displayedCards = sortBaseCards(baseCards);
+  const isStarred = (id) => !!id && starredIds.has(id);
+  const toggleStar = async (id) => {
+    if (!id) return;
+    const token = localStorage.getItem('auth_token');
+    // Optimistic update
+    setStarredIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+    try {
+      const res = await fetch(`http://localhost:5001/api/cards/cards/${id}/star`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        throw new Error('Failed to toggle on server');
+      }
+      const data = await res.json();
+      // Ensure local state matches server response (in case of race)
+      setStarredIds(prev => {
+        const next = new Set(prev);
+        if (data.starred) {
+          next.add(id);
+        } else {
+          next.delete(id);
+        }
+        return next;
+      });
+    } catch (e) {
+      console.warn('Server star toggle failed, reverting', e);
+      // Revert
+      setStarredIds(prev => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id); else next.add(id);
+        return next;
+      });
+    }
+  };
+  if (showStarredOnly) {
+    displayedCards = displayedCards.filter(obj => isStarred(obj.card._id));
+  }
+
+  const handleChangeSortField = (e) => {
+    setSortConfig(cfg => ({ ...cfg, field: e.target.value }));
+  };
+  const toggleSortDirection = () => {
+    setSortConfig(cfg => ({ ...cfg, direction: cfg.direction === 'asc' ? 'desc' : 'asc' }));
+  };
 
   if (loading) {
     return (
@@ -374,12 +563,23 @@ export default function CardSetPage() {
             
             {/* Study modes */}
             <div className="flex gap-4 mb-6">
-              <button className="bg-blue-100 text-blue-600 px-4 py-2 rounded-lg font-medium flex items-center gap-2 text-sm">
+              <button 
+                onClick={() => {
+                  // When switching to regular flashcard, stop speech and turn off AutoFlashcard
+                  if (showAutoFlashcard) {
+                    console.log('Switching to regular flashcard - stopping speech');
+                    speechSynthesis.cancel();
+                    setShowAutoFlashcard(false);
+                    setHighlightedCardIndex(-1);
+                  }
+                }}
+                className="bg-blue-100 text-blue-600 px-4 py-2 rounded-lg font-medium flex items-center gap-2 text-sm"
+              >
                 <span className="material-icons text-sm">credit_card</span>
                 Thẻ ghi nhớ
               </button>
               <button 
-                onClick={() => setShowAutoFlashcard(!showAutoFlashcard)}
+                onClick={handleAutoFlashcardToggle}
                 className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 text-sm ${
                   showAutoFlashcard 
                     ? 'bg-green-100 text-green-600' 
@@ -417,31 +617,50 @@ export default function CardSetPage() {
                 <div className="flex justify-center mb-6">
                   <div className="relative">
                     <div 
-                      className="w-80 h-48 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow-lg border cursor-pointer flex items-center justify-center text-center p-6 transition-all hover:scale-105 hover:shadow-xl"
+                      className="w-96 h-64 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow-lg border cursor-pointer transition-all hover:scale-105 hover:shadow-xl overflow-hidden flex flex-col"
                       onClick={toggleAnswer}
                     >
-                  <div className="w-full">
-                    <div className="text-xl font-bold mb-3 card-content">
-                      <div
-                        dangerouslySetInnerHTML={{
-                          __html: showAnswer 
-                            ? allCards[currentCard]?.content.back.text || ''
-                            : allCards[currentCard]?.content.front.text || ''
-                        }}
-                      />
+                      {/* Header */}
+                      <div className="px-4 py-2 flex-shrink-0 border-b border-gray-200/50 bg-white/70">
+                        <div className="text-xs text-gray-500 text-center">
+                          {showAnswer ? "Mặt sau" : "Mặt trước"} - Click để lật thẻ
+                        </div>
+                      </div>
+                      
+                      {/* Content with scroll */}
+                      <div className="flex-1 p-4 overflow-y-auto flashcard-content">
+                        <div className="h-full flex items-center justify-center">
+                          <div 
+                            className="text-lg font-medium break-words leading-relaxed text-center flashcard-text w-full"
+                            style={{ 
+                              wordWrap: 'break-word',
+                              overflowWrap: 'break-word',
+                              hyphens: 'auto'
+                            }}
+                            dangerouslySetInnerHTML={{
+                              __html: showAnswer 
+                                ? allCards[currentCard]?.content.back.text || ''
+                                : allCards[currentCard]?.content.front.text || ''
+                            }}
+                          />
+                        </div>
+                      </div>
                     </div>
-                    <div className="text-xs text-gray-500">
-                      {showAnswer ? "Mặt sau" : "Mặt trước"} - Click để lật thẻ
-                    </div>
-                  </div>
-                </div>
-                {/* Audio button */}
-                <button className="absolute bottom-3 right-3 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-md">
+                {/* Audio button (placeholder) */}
+                <button
+                  className="absolute bottom-3 right-12 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-md"
+                  onClick={(e)=>{e.stopPropagation(); /* TODO: play audio */}}
+                  title="Nghe"
+                >
                   <span className="material-icons text-gray-600 text-sm">volume_up</span>
                 </button>
                 {/* Star button */}
-                <button className="absolute top-3 right-3 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-md">
-                  <span className="material-icons text-gray-400 text-sm">star_border</span>
+                <button
+                  className="absolute bottom-3 right-3 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-md"
+                  onClick={(e)=>{e.stopPropagation(); const id = allCards[currentCard]?._id; toggleStar(id);}}
+                  title={isStarred(allCards[currentCard]?._id) ? 'Bỏ sao' : 'Đánh dấu sao'}
+                >
+                  <span className={`material-icons text-sm ${isStarred(allCards[currentCard]?._id) ? 'text-yellow-500' : 'text-gray-400'}`}>{isStarred(allCards[currentCard]?._id) ? 'star' : 'star_border'}</span>
                 </button>
               </div>
             </div>
@@ -489,182 +708,254 @@ export default function CardSetPage() {
 
         {/* Cards List */}
         <div className="bg-white rounded-xl shadow-sm">
-          <div className="p-6 border-b flex justify-between items-center">
+          <div className="p-6 border-b flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <h2 className="text-lg font-semibold">Danh sách từ vựng ({cardSet.stats.totalCards})</h2>
-            
-            {/* Toggle button for show all / paginated view */}
-            <button
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                showAllCards
-                  ? "bg-red-100 text-red-700 hover:bg-red-200"
-                  : "bg-blue-100 text-blue-700 hover:bg-blue-200"
-              }`}
-              onClick={toggleShowAllCards}
-            >
-              {showAllCards ? "Thu gọn" : "Xem tất cả"}
-            </button>
+            <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+              {/* Sort controls */}
+              <div className="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-lg">
+                <label className="text-xs text-gray-500">Sắp xếp:</label>
+                <select
+                  value={sortConfig.field}
+                  onChange={handleChangeSortField}
+                  className="text-sm border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
+                >
+                  <option value="default">Mặc định</option>
+                  <option value="frontText">Từ (mặt trước)</option>
+                  <option value="alphabetical">Bảng chữ cái (mặt trước)</option>
+                  <option value="backText">Nghĩa (mặt sau)</option>
+                  <option value="difficulty">Độ khó (ease)</option>
+                  <option value="createdAt">Ngày tạo</option>
+                  <option value="updatedAt">Ngày cập nhật</option>
+                </select>
+                <button
+                  onClick={toggleSortDirection}
+                  className="w-8 h-8 flex items-center justify-center rounded border bg-white hover:bg-gray-100"
+                  title={sortConfig.direction === 'asc' ? 'Đang tăng dần' : 'Đang giảm dần'}
+                >
+                  <span className="material-icons text-sm text-gray-600">
+                    {sortConfig.direction === 'asc' ? 'arrow_upward' : 'arrow_downward'}
+                  </span>
+                </button>
+              </div>
+              <button
+                onClick={() => setShowStarredOnly(s => !s)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors ${showStarredOnly ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                title="Hiển thị chỉ các thẻ đã sao"
+              >
+                <span className="material-icons text-sm">star</span>
+                {showStarredOnly ? 'Đang lọc sao' : 'Lọc sao'}
+                {starredIds.size > 0 && (
+                  <span className="text-xs bg-yellow-200 text-yellow-800 px-2 py-0.5 rounded-full">{starredIds.size}</span>
+                )}
+              </button>
+
+              {/* Toggle show all */}
+              <button
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  showAllCards
+                    ? "bg-red-100 text-red-700 hover:bg-red-200"
+                    : "bg-blue-100 text-blue-700 hover:bg-blue-200"
+                }`}
+                onClick={toggleShowAllCards}
+              >
+                {showAllCards ? "Thu gọn" : "Xem tất cả"}
+              </button>
+            </div>
           </div>
           
-          <div ref={cardListRef} className="divide-y max-h-96 overflow-y-auto">
-            {cards.map((card, index) => {
-              // Calculate the actual index in allCards array for highlighting
-              let actualIndex = index;
-              if (!showAllCards) {
-                actualIndex = (currentPage - 1) * 50 + index;
-              }
-              
-              const isHighlighted = highlightedCardIndex === actualIndex;
-              
-              return (
-                <div 
-                  key={card._id} 
-                  data-card-index={actualIndex}
-                  className={`p-4 hover:bg-gray-50 transition-colors ${
-                    isHighlighted ? 'bg-yellow-100 border-l-4 border-yellow-400' : ''
-                  }`}
-                >
-                  <div className="flex items-start gap-4">
-                    <div className="text-sm text-gray-400 w-8 flex-shrink-0">
-                      {showAllCards ? index + 1 : (currentPage - 1) * 50 + index + 1}
-                    </div>
-                  
-                  {/* Vertical layout for term and definition */}
-                  <div className="flex-1">
-                    {/* Front (Term) */}
-                    <div className="mb-3">
-                      <div className="text-sm text-gray-500 mb-1">Từ</div>
-                      <div className="font-medium text-base card-content">
-                        {/* Text content */}
-                        {card.content.front.text && (
-                          <div className="mb-2">
-                            <div
-                              dangerouslySetInnerHTML={{
-                                __html: card.content.front.text
-                              }}
-                            />
+          {/* Alphabetical grouping if selected */}
+          <div ref={cardListRef} className="max-h-96 overflow-y-auto">
+            {sortConfig.field === 'alphabetical' ? (
+              (() => {
+                const groups = {};
+                displayedCards.forEach((it) => {
+                  const rawFront = extractPlainText(it.card?.content?.front?.text || it.card?.content?.front?.html || '');
+                  let first = normalizeAlpha(rawFront).charAt(0).toUpperCase();
+                  if (!first || !/[A-Z0-9]/.test(first)) first = '#';
+                  if (!groups[first]) groups[first] = [];
+                  groups[first].push(it);
+                });
+                const orderedKeys = Object.keys(groups).sort((a,b) => a.localeCompare(b));
+                return orderedKeys.map(letter => (
+                  <div key={letter} className="border-b last:border-b-0">
+                    <div className="sticky top-0 z-10 bg-gray-100/90 backdrop-blur px-3 py-1 text-xs font-semibold text-gray-600 uppercase tracking-wide">{letter}</div>
+                    <div className="divide-y">
+                      {groups[letter].map((item, localIdx) => {
+                        const { card, originalIndex } = item;
+                        const isHighlighted = highlightedCardIndex === originalIndex;
+                        return (
+                          <div
+                            key={card._id}
+                            data-card-index={originalIndex}
+                            className={`p-4 hover:bg-gray-50 transition-colors ${isHighlighted ? 'bg-yellow-100 border-l-4 border-yellow-400' : ''}`}
+                          >
+                            <div className="flex items-start gap-4">
+                              <div className="text-sm text-gray-400 w-12 flex-shrink-0 flex items-start gap-1">
+                                <span className="pt-0.5">{letter}</span>
+                                <button
+                                  className="w-6 h-6 flex items-center justify-center rounded hover:bg-yellow-50"
+                                  onClick={() => toggleStar(card._id)}
+                                  title={isStarred(card._id) ? 'Bỏ sao' : 'Đánh dấu sao'}
+                                >
+                                  <span className={`material-icons text-base ${isStarred(card._id) ? 'text-yellow-500' : 'text-gray-300'}`}>{isStarred(card._id) ? 'star' : 'star_border'}</span>
+                                </button>
+                              </div>
+                              <div className="flex-1">
+                                <div className="mb-3">
+                                  <div className="text-sm text-gray-500 mb-1">Từ</div>
+                                  <div className="font-medium text-base card-content">
+                                    {card.content.front.text && (
+                                      <div className="mb-2"><div dangerouslySetInnerHTML={{ __html: card.content.front.text }} /></div>
+                                    )}
+                                    {card.content.front.html && card.content.front.html !== card.content.front.text && (
+                                      <>
+                                        {card.content.front.text && <hr className="border-gray-300 my-2" />}
+                                        <div className="mb-2"><div dangerouslySetInnerHTML={{ __html: card.content.front.html }} /></div>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                                <hr className="border-gray-400 mb-3" />
+                                <div>
+                                  <div className="text-sm text-gray-500 mb-1">Nghĩa</div>
+                                  <div className="text-gray-700 card-content">
+                                    {card.content.back.text && (
+                                      <div className="mb-2"><div dangerouslySetInnerHTML={{ __html: card.content.back.text }} /></div>
+                                    )}
+                                    {card.content.back.html && card.content.back.html !== card.content.back.text && (
+                                      <>
+                                        {card.content.back.text && <hr className="border-gray-300 my-2" />}
+                                        <div className="mb-2"><div dangerouslySetInnerHTML={{ __html: card.content.back.html }} /></div>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              {card.learning.status !== 'new' && (
+                                <div className="text-xs text-gray-500 flex-shrink-0">
+                                  <div>Độ khó: {card.learning.easeFactor.toFixed(1)}</div>
+                                  <div>Khoảng cách: {card.learning.interval}d</div>
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        )}
-                        
-                        {/* HTML content if different from text */}
-                        {card.content.front.html && card.content.front.html !== card.content.front.text && (
-                          <>
-                            {card.content.front.text && <hr className="border-gray-300 my-2" />}
-                            <div className="mb-2">
-                              <div
-                                dangerouslySetInnerHTML={{
-                                  __html: card.content.front.html
-                                }}
-                              />
-                            </div>
-                          </>
-                        )}
-                        
-                        {/* Image content */}
-                        {card.content.front.image && (
-                          <>
-                            {(card.content.front.text || card.content.front.html) && 
-                              <hr className="border-gray-300 my-2" />}
-                            <div className="mb-2">
-                              <img 
-                                src={card.content.front.image} 
-                                alt="Front content" 
-                                className="max-w-full h-auto rounded"
-                              />
-                            </div>
-                          </>
-                        )}
-                        
-                        {/* Audio content */}
-                        {card.content.front.audio && (
-                          <>
-                            {(card.content.front.text || card.content.front.html || card.content.front.image) && 
-                              <hr className="border-gray-300 my-2" />}
-                            <div className="mb-2">
-                              <audio controls className="w-full">
-                                <source src={card.content.front.audio} />
-                                Trình duyệt không hỗ trợ audio.
-                              </audio>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    
-                    {/* Divider line between front and back */}
-                    <hr className="border-gray-400 mb-3" />
-                    
-                    {/* Back (Definition) */}
-                    <div>
-                      <div className="text-sm text-gray-500 mb-1">Nghĩa</div>
-                      <div className="text-gray-700 card-content">
-                        {/* Text content */}
-                        {card.content.back.text && (
-                          <div className="mb-2">
-                            <div
-                              dangerouslySetInnerHTML={{
-                                __html: card.content.back.text
-                              }}
-                            />
-                          </div>
-                        )}
-                        
-                        {/* HTML content if different from text */}
-                        {card.content.back.html && card.content.back.html !== card.content.back.text && (
-                          <>
-                            {card.content.back.text && <hr className="border-gray-300 my-2" />}
-                            <div className="mb-2">
-                              <div
-                                dangerouslySetInnerHTML={{
-                                  __html: card.content.back.html
-                                }}
-                              />
-                            </div>
-                          </>
-                        )}
-                        
-                        {/* Image content */}
-                        {card.content.back.image && (
-                          <>
-                            {(card.content.back.text || card.content.back.html) && 
-                              <hr className="border-gray-300 my-2" />}
-                            <div className="mb-2">
-                              <img 
-                                src={card.content.back.image} 
-                                alt="Back content" 
-                                className="max-w-full h-auto rounded"
-                              />
-                            </div>
-                          </>
-                        )}
-                        
-                        {/* Audio content */}
-                        {card.content.back.audio && (
-                          <>
-                            {(card.content.back.text || card.content.back.html || card.content.back.image) && 
-                              <hr className="border-gray-300 my-2" />}
-                            <div className="mb-2">
-                              <audio controls className="w-full">
-                                <source src={card.content.back.audio} />
-                                Trình duyệt không hỗ trợ audio.
-                              </audio>
-                            </div>
-                          </>
-                        )}
-                      </div>
+                        )
+                      })}
                     </div>
                   </div>
-                  
-                  {/* Learning progress */}
-                  {card.learning.status !== "new" && (
-                    <div className="text-xs text-gray-500 flex-shrink-0">
-                      <div>Độ khó: {card.learning.easeFactor.toFixed(1)}</div>
-                      <div>Khoảng cách: {card.learning.interval}d</div>
+                ));
+              })()
+            ) : (
+              displayedCards.map((item, index) => {
+              const { card, originalIndex } = item;
+              const isHighlighted = highlightedCardIndex === originalIndex;
+              return (
+                <div 
+                  key={card._id}
+                  data-card-index={originalIndex}
+                  className={`p-4 hover:bg-gray-50 transition-colors ${isHighlighted ? 'bg-yellow-100 border-l-4 border-yellow-400' : ''}`}
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="text-sm text-gray-400 w-12 flex-shrink-0 flex items-start gap-1">
+                      <span className="pt-0.5">{showAllCards ? (index + 1) : (Math.floor(originalIndex) + 1)}</span>
+                      <button
+                        className="w-6 h-6 flex items-center justify-center rounded hover:bg-yellow-50"
+                        onClick={() => toggleStar(card._id)}
+                        title={isStarred(card._id) ? 'Bỏ sao' : 'Đánh dấu sao'}
+                      >
+                        <span className={`material-icons text-base ${isStarred(card._id) ? 'text-yellow-500' : 'text-gray-300'}`}>{isStarred(card._id) ? 'star' : 'star_border'}</span>
+                      </button>
                     </div>
-                  )}
+                    <div className="flex-1">
+                      {/* Front (Term) */}
+                      <div className="mb-3">
+                        <div className="text-sm text-gray-500 mb-1">Từ</div>
+                        <div className="font-medium text-base card-content">
+                          {card.content.front.text && (
+                            <div className="mb-2">
+                              <div dangerouslySetInnerHTML={{ __html: card.content.front.text }} />
+                            </div>
+                          )}
+                          {card.content.front.html && card.content.front.html !== card.content.front.text && (
+                            <>
+                              {card.content.front.text && <hr className="border-gray-300 my-2" />}
+                              <div className="mb-2">
+                                <div dangerouslySetInnerHTML={{ __html: card.content.front.html }} />
+                              </div>
+                            </>
+                          )}
+                          {card.content.front.image && (
+                            <>
+                              {(card.content.front.text || card.content.front.html) && <hr className="border-gray-300 my-2" />}
+                              <div className="mb-2">
+                                <img src={card.content.front.image} alt="Front content" className="max-w-full h-auto rounded" />
+                              </div>
+                            </>
+                          )}
+                          {card.content.front.audio && (
+                            <>
+                              {(card.content.front.text || card.content.front.html || card.content.front.image) && <hr className="border-gray-300 my-2" />}
+                              <div className="mb-2">
+                                <audio controls className="w-full">
+                                  <source src={card.content.front.audio} />
+                                  Trình duyệt không hỗ trợ audio.
+                                </audio>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <hr className="border-gray-400 mb-3" />
+                      {/* Back (Definition) */}
+                      <div>
+                        <div className="text-sm text-gray-500 mb-1">Nghĩa</div>
+                        <div className="text-gray-700 card-content">
+                          {card.content.back.text && (
+                            <div className="mb-2">
+                              <div dangerouslySetInnerHTML={{ __html: card.content.back.text }} />
+                            </div>
+                          )}
+                          {card.content.back.html && card.content.back.html !== card.content.back.text && (
+                            <>
+                              {card.content.back.text && <hr className="border-gray-300 my-2" />}
+                              <div className="mb-2">
+                                <div dangerouslySetInnerHTML={{ __html: card.content.back.html }} />
+                              </div>
+                            </>
+                          )}
+                          {card.content.back.image && (
+                            <>
+                              {(card.content.back.text || card.content.back.html) && <hr className="border-gray-300 my-2" />}
+                              <div className="mb-2">
+                                <img src={card.content.back.image} alt="Back content" className="max-w-full h-auto rounded" />
+                              </div>
+                            </>
+                          )}
+                          {card.content.back.audio && (
+                            <>
+                              {(card.content.back.text || card.content.back.html || card.content.back.image) && <hr className="border-gray-300 my-2" />}
+                              <div className="mb-2">
+                                <audio controls className="w-full">
+                                  <source src={card.content.back.audio} />
+                                  Trình duyệt không hỗ trợ audio.
+                                </audio>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    {card.learning.status !== "new" && (
+                      <div className="text-xs text-gray-500 flex-shrink-0">
+                        <div>Độ khó: {card.learning.easeFactor.toFixed(1)}</div>
+                        <div>Khoảng cách: {card.learning.interval}d</div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
               );
-            })}
+            })
+            )}
           </div>
           
           {/* Pagination - only show when not showing all cards */}
