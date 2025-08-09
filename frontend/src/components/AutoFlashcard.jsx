@@ -1,7 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-const AutoFlashcard = ({ cards, onHighlight }) => {
-  const [currentIndex, setCurrentIndex] = useState(0);
+// Helper to extract plain text (strip simple HTML tags)
+const stripHtml = (html='') => {
+  if (!html) return '';
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  return (div.textContent || div.innerText || '').trim();
+};
+
+const AutoFlashcard = ({ cards, onHighlight, currentIndex: controlledIndex, onIndexChange }) => {
+  const [uncontrolledIndex, setUncontrolledIndex] = useState(0);
+  const currentIndex = (typeof controlledIndex === 'number' ? controlledIndex : uncontrolledIndex);
+  const setCurrentIndex = (val) => {
+    if (onIndexChange) onIndexChange(val);
+    else setUncontrolledIndex(val);
+  };
   const [isFront, setIsFront] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
   const [speechRate, setSpeechRate] = useState(1.0);
@@ -42,11 +55,6 @@ const AutoFlashcard = ({ cards, onHighlight }) => {
       }
     });
     
-    console.log('Language detection (limited scope):', {
-      text: cleanText.substring(0, 50),
-      allowedLanguages,
-      counts
-    });
     
     // Find the language with the highest count
     let maxCount = 0;
@@ -108,7 +116,6 @@ const AutoFlashcard = ({ cards, onHighlight }) => {
       });
     }
     
-    console.log('Text segments (limited):', segments);
     return segments;
   };
 
@@ -159,7 +166,6 @@ const AutoFlashcard = ({ cards, onHighlight }) => {
   // Cleanup on component unmount - Stop speech when leaving AutoFlashcard
   useEffect(() => {
     return () => {
-      console.log('AutoFlashcard unmounting - stopping all speech');
       speechSynthesis.cancel();
       setIsReading(false);
       // Clear any pending intervals or timeouts
@@ -196,7 +202,6 @@ const AutoFlashcard = ({ cards, onHighlight }) => {
   const speakSegments = (segments, index) => {
     if (index >= segments.length) {
       // All segments completed
-      console.log('All segments completed, auto flipping...');
       setIsReading(false);
       if (isPlaying) {
         setTimeout(() => {
@@ -207,7 +212,6 @@ const AutoFlashcard = ({ cards, onHighlight }) => {
     }
 
     const segment = segments[index];
-    console.log(`Speaking segment ${index + 1}/${segments.length}:`, segment.text, 'in', segment.lang);
     
     const utterance = new SpeechSynthesisUtterance(segment.text);
     utterance.lang = segment.lang;
@@ -215,7 +219,6 @@ const AutoFlashcard = ({ cards, onHighlight }) => {
     utterance.volume = 1.0;
     
     utterance.onend = () => {
-      console.log(`Segment ${index + 1} completed`);
       // Small delay between segments
       setTimeout(() => {
         speakSegments(segments, index + 1);
@@ -242,7 +245,6 @@ const AutoFlashcard = ({ cards, onHighlight }) => {
       finalLang = detectLanguage(text, allowedLanguages);
     }
     
-    console.log('Speaking single text:', text, 'in', finalLang);
     
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = finalLang;
@@ -251,7 +253,6 @@ const AutoFlashcard = ({ cards, onHighlight }) => {
     
     // When speech ends, auto flip to next side/card
     utterance.onend = () => {
-      console.log('Speech completed, auto flipping...');
       setIsReading(false);
       if (isPlaying) {
         setTimeout(() => {
@@ -293,15 +294,6 @@ const AutoFlashcard = ({ cards, onHighlight }) => {
     const textToSpeak = isFront ? frontText : backText;
     const defaultLanguage = isFront ? frontLanguage : backLanguage;
     
-    console.log('Showing card:', {
-      currentIndex, 
-      isFront, 
-      text: textToSpeak,
-      autoDetect: autoDetectLang,
-      defaultLang: defaultLanguage,
-      allowedLanguages: isFront ? frontLanguages : backLanguages,
-      autoScroll: autoScroll
-    });
     
     speak(textToSpeak, defaultLanguage, isFront);
   };
@@ -329,7 +321,6 @@ const AutoFlashcard = ({ cards, onHighlight }) => {
   };
 
   const autoFlip = () => {
-    console.log('Auto flipping from', isFront ? 'front' : 'back');
     setIsFront(prev => {
       const newIsFront = !prev;
       if (newIsFront) {
@@ -352,20 +343,14 @@ const AutoFlashcard = ({ cards, onHighlight }) => {
     const newIndex = (currentIndex + 1) % cards.length;
     setCurrentIndex(newIndex);
     setIsFront(true);
-    // Always highlight, but scroll only if autoScroll is enabled
-    if (onHighlight) {
-      setTimeout(() => onHighlight(newIndex, autoScroll), 100);
-    }
+    if (onHighlight) setTimeout(() => onHighlight(newIndex, autoScroll), 100);
   };
 
   const prevCard = () => {
     const newIndex = (currentIndex - 1 + cards.length) % cards.length;
     setCurrentIndex(newIndex);
     setIsFront(true);
-    // Always highlight, but scroll only if autoScroll is enabled
-    if (onHighlight) {
-      setTimeout(() => onHighlight(newIndex, autoScroll), 100);
-    }
+    if (onHighlight) setTimeout(() => onHighlight(newIndex, autoScroll), 100);
   };
 
   const flipCard = () => {
@@ -393,6 +378,28 @@ const AutoFlashcard = ({ cards, onHighlight }) => {
     frontText = currentCard.term || 'Không có nội dung';
     backText = currentCard.definition || 'Không có nội dung';
   }
+
+  // Seek bar hover state
+  const [hoverInfo, setHoverInfo] = useState({ show: false, index: 0, x: 0 });
+  const progressRef = useRef(null);
+
+  const handleProgressMouseMove = (e) => {
+    if (!progressRef.current || cards.length === 0) return;
+    const rect = progressRef.current.getBoundingClientRect();
+    const rel = Math.min(Math.max(0, e.clientX - rect.left), rect.width);
+    const ratio = rel / rect.width;
+    const idx = Math.min(cards.length - 1, Math.max(0, Math.floor(ratio * cards.length)));
+    setHoverInfo({ show: true, index: idx, x: rel });
+  };
+  const handleProgressLeave = () => setHoverInfo(h => ({ ...h, show: false }));
+  const handleProgressClick = () => {
+    if (hoverInfo.show) {
+      setCurrentIndex(hoverInfo.index);
+      setIsFront(true);
+      if (onHighlight) onHighlight(hoverInfo.index, true);
+      if (!isPlaying) setIsPlaying(true); // start playing automatically when seeking
+    }
+  };
 
   return (
     <div className="bg-white rounded-xl shadow-lg p-6">
@@ -441,20 +448,7 @@ const AutoFlashcard = ({ cards, onHighlight }) => {
               ⏭️
             </button>
             
-            {!autoScroll && (
-              <button
-                onClick={() => {
-                  if (onHighlight) {
-                    console.log('Manual scroll to current card:', currentIndex);
-                    onHighlight(currentIndex, true); // Force scroll = true for manual scroll
-                  }
-                }}
-                className="px-3 py-2 rounded-lg bg-yellow-100 text-yellow-700 hover:bg-yellow-200"
-                title="Cuộn đến thẻ hiện tại (highlight vẫn đang hiện)"
-              >
-                📍 Cuộn
-              </button>
-            )}
+            {/* Removed manual scroll button per user request */}
           </div>
         </div>
 
@@ -580,14 +574,35 @@ const AutoFlashcard = ({ cards, onHighlight }) => {
 
         {/* Progress indicator */}
         <div className="mb-4">
-          <div className="text-sm text-gray-600 mb-2">
-            Thẻ {currentIndex + 1} / {cards.length}
+          <div className="flex justify-between text-sm text-gray-600 mb-1">
+            <span>Thẻ {currentIndex + 1} / {cards.length}</span>
+            <span className="text-xs text-gray-400">Nhấp / kéo để nhảy</span>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
-            <div 
-              className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+          <div
+            ref={progressRef}
+            className="relative w-full bg-gray-200/80 hover:bg-gray-300 cursor-pointer h-3 rounded group"
+            onMouseMove={handleProgressMouseMove}
+            onMouseLeave={handleProgressLeave}
+            onClick={handleProgressClick}
+          >
+            <div
+              className="absolute top-0 left-0 h-3 bg-gradient-to-r from-blue-400 to-indigo-500 rounded"
               style={{ width: `${((currentIndex + 1) / cards.length) * 100}%` }}
-            ></div>
+            />
+            {hoverInfo.show && (
+              <>
+                <div
+                  className="absolute top-0 h-3 w-px bg-blue-600/70"
+                  style={{ left: hoverInfo.x }}
+                />
+                <div
+                  className="absolute -top-8 -translate-x-1/2 whitespace-nowrap bg-white border border-gray-200 shadow px-2 py-1 rounded text-xs max-w-[180px] overflow-hidden text-ellipsis"
+                  style={{ left: hoverInfo.x }}
+                >
+                  #{hoverInfo.index + 1} {stripHtml(cards[hoverInfo.index]?.content?.front?.text || '')?.slice(0,40)}
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

@@ -31,6 +31,7 @@ export default function CardSetPage() {
   // Auto flashcard states
   const [showAutoFlashcard, setShowAutoFlashcard] = useState(false);
   const [highlightedCardIndex, setHighlightedCardIndex] = useState(-1);
+  const [autoFlashIndex, setAutoFlashIndex] = useState(0); // control AutoFlashcard current index
   
   // Sorting state
   const [sortConfig, setSortConfig] = useState({ field: 'default', direction: 'asc' });
@@ -636,11 +637,13 @@ export default function CardSetPage() {
             </div>
 
             {/* Conditional display: AutoFlashcard or regular flashcard */}
-            {showAutoFlashcard ? (
+    {showAutoFlashcard ? (
               <div className="mb-6">
                 <AutoFlashcard 
                   cards={studyCards} 
                   onHighlight={handleFlashcardHighlight}
+      currentIndex={autoFlashIndex}
+      onIndexChange={(i)=>{setAutoFlashIndex(i); setHighlightedCardIndex(studyCards[i]?._sortedIndex ?? i);}}
                 />
               </div>
             ) : (
@@ -878,17 +881,26 @@ export default function CardSetPage() {
               })()
             ) : (
               displayedCards.map((item, index) => {
-              const { card, originalIndex } = item;
-              const isHighlighted = highlightedCardIndex === originalIndex;
+              const { card, sortedIndex } = item;
+              const isHighlighted = highlightedCardIndex === sortedIndex;
               return (
                 <div 
                   key={card._id}
-                  data-card-index={originalIndex}
-                  className={`p-4 hover:bg-gray-50 transition-colors ${isHighlighted ? 'bg-yellow-100 border-l-4 border-yellow-400' : ''}`}
+                  data-card-index={sortedIndex}
+                  className={`p-4 hover:bg-gray-50 transition-colors cursor-pointer ${isHighlighted ? 'bg-yellow-100 border-l-4 border-yellow-400' : ''}`}
+                  onClick={() => {
+                    // jump AutoFlashcard to this card
+                    const idxInStudy = studyCards.findIndex(c => c._id === card._id);
+                    if (idxInStudy >= 0) {
+                      setAutoFlashIndex(idxInStudy);
+                      setHighlightedCardIndex(sortedIndex);
+                      if (!showAutoFlashcard) setShowAutoFlashcard(true);
+                    }
+                  }}
                 >
                   <div className="flex items-start gap-4">
                     <div className="text-sm text-gray-400 w-12 flex-shrink-0 flex items-start gap-1">
-                      <span className="pt-0.5">{showAllCards ? (index + 1) : (Math.floor(originalIndex) + 1)}</span>
+                      <span className="pt-0.5">{showAllCards ? (index + 1) : (Math.floor(sortedIndex) + 1)}</span>
                       <button
                         className="w-6 h-6 flex items-center justify-center rounded hover:bg-yellow-50"
                         onClick={() => toggleStar(card._id)}
