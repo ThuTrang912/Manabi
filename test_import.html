@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Import Test</title>
+</head>
+<body>
+    <h1>Test Import Functionality</h1>
+    
+    <form id="testForm">
+        <div>
+            <label>Tên bộ thẻ:</label>
+            <input type="text" id="cardSetName" value="Tên Test Từ HTML" />
+        </div>
+        <br>
+        <div>
+            <label>CSV Data:</label>
+            <textarea id="csvText">hello,xin chào
+goodbye,tạm biệt</textarea>
+        </div>
+        <br>
+        <button type="button" onclick="testImport()">Test Import</button>
+    </form>
+    
+    <div id="result"></div>
+    
+    <script>
+        async function testImport() {
+            const cardSetName = document.getElementById('cardSetName').value;
+            const csvText = document.getElementById('csvText').value;
+            
+            const requestBody = {
+                csvText: csvText,
+                customName: cardSetName.trim()
+            };
+            
+            console.log('Sending request:', requestBody);
+            
+            try {
+                const response = await fetch('http://localhost:5001/api/cards/import/quizlet', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer YOUR_TOKEN_HERE' // Replace with actual token
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+                
+                const data = await response.json();
+                console.log('Response:', data);
+                
+                document.getElementById('result').innerHTML = 
+                    '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                    
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('result').innerHTML = 
+                    '<p style="color: red;">Error: ' + error.message + '</p>';
+            }
+        }
+    </script>
+</body>
+</html>
